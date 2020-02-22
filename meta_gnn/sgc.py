@@ -13,7 +13,7 @@ def main(args):
     set_seed(args.seed)
 
     adj, features, labels = load_citation(args.dataset, args.normalization)
-
+    # KH: specific steps for SGC 
     features = sgc_precompute(features, adj, args.degree)
 
     if args.dataset == 'citeseer':
@@ -24,29 +24,33 @@ def main(args):
         node_num = 2708
         class_label = [0, 1, 2, 3, 4, 5, 6]
         combination = list(combinations(class_label, 2))
-
+        # create a sequence of two labels
     config = [
         ('linear', [args.hidden, features.size(1)]),
         ('linear', [args.n_way, args.hidden])
     ]
+    # KH: there are only two ways for this code
 
     device = torch.device('cuda')
+    # for each combination of test label as a task.
 
     for i in range(len(combination)):
         print("Cross Validation: {}".format((i + 1)))
 
         maml = Meta(args, config).to(device)
-
-        test_label = list(combination[i])
+        # for each CV fold, just get the first task of the combination as the test label.
+        test_label = list(combination[i]) 
         train_label = [n for n in class_label if n not in test_label]
         print('Cross Validation {} Train_Label_List: {} '.format(i + 1, train_label))
         print('Cross Validation {} Test_Label_List: {} '.format(i + 1, test_label))
 
         for j in range(args.epoch):
+            # KH: for each episode, sample tasks
             x_spt, y_spt, x_qry, y_qry = sgc_data_generator(features, labels, node_num, train_label, args.task_num, args.n_way, args.k_spt, args.k_qry)
             accs = maml.forward(x_spt, y_spt, x_qry, y_qry)
             print('Step:', j, '\tMeta_Training_Accuracy:', accs)
             if j % 100 == 0:
+                # for every 100 steps, validate it. For testing, we need an additional set.
                 torch.save(maml.state_dict(), 'maml.pkl')
                 meta_test_acc = []
                 for k in range(step):
