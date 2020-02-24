@@ -11,7 +11,7 @@ def sgc_data_generator(features, labels, node_num, select_array, task_num, n_way
 
     labels_local = labels.clone().detach()
     select_class = random.sample(select_array, n_way)
-
+    # select the index node for all the 
     for j in range(node_num):
         if (labels_local[j] == select_class[0]):
             class1_idx.append(j)
