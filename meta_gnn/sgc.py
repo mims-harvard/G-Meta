@@ -48,9 +48,9 @@ def main(args):
             # KH: for each episode, sample tasks
             x_spt, y_spt, x_qry, y_qry = sgc_data_generator(features, labels, node_num, train_label, args.task_num, args.n_way, args.k_spt, args.k_qry)
             accs = maml.forward(x_spt, y_spt, x_qry, y_qry)
-            print('Step:', j, '\tMeta_Training_Accuracy:', accs)
             if j % 100 == 0:
-                # for every 100 steps, validate it. For testing, we need an additional set.
+                print('Step:', j, '\tMeta_Training_Accuracy:', accs)
+    # for every 100 steps, validate it. For testing, we need an additional set.
                 torch.save(maml.state_dict(), 'maml.pkl')
                 meta_test_acc = []
                 for k in range(step):
@@ -60,14 +60,8 @@ def main(args):
                     x_spt, y_spt, x_qry, y_qry = sgc_data_generator(features, labels, node_num, test_label, args.task_num, args.n_way, args.k_spt, args.k_qry)
                     accs = model_meta_trained.forward(x_spt, y_spt, x_qry, y_qry)
                     meta_test_acc.append(accs)
-                if args.dataset == 'citeseer':
-                    with open('citeseer.txt', 'a') as f:
-                        f.write('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
-                        f.write('\n')
-                elif args.dataset == 'cora':
-                    with open('cora.txt', 'a') as f:
-                        f.write('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
-                        f.write('\n')
+                print('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
+
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import pickle as pkl
 import networkx as nx
 from normalization import fetch_normalization, row_normalize
 from sklearn.metrics import f1_score
-
+from scipy.sparse import csr_matrix, isspmatrix
 
 def f1(output, labels):
     output = output.max(1)[1]
@@ -31,6 +31,8 @@ def preprocess_citation(adj, features, normalization="AugNormAdj"):
 
 
 def sparse_mx_to_torch_sparse_tensor(sparse_mx):
+    #print(sparse_mx)
+    print(isspmatrix(sparse_mx))
     sparse_mx = sparse_mx.tocoo().astype(np.float32)
     indices = torch.from_numpy(
         np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
@@ -77,10 +79,10 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", cuda=True):
     labels = torch.max(labels, dim=1)[1]
     adj = sparse_mx_to_torch_sparse_tensor(adj).float()
 
-    if cuda:
-        features = features.cuda()
-        adj = adj.cuda()
-        labels = labels.cuda()
+    #if cuda:
+    #    features = features.cuda()
+    #    adj = adj.cuda()
+    #    labels = labels.cuda()
 
     return adj, features, labels
 

@@ -6,26 +6,44 @@ from itertools import combinations
 from utils import load_citation, sgc_precompute, set_seed, sparse_mx_to_torch_sparse_tensor
 from meta import Meta
 from sgc_data_generator import sgc_data_generator
-
+from scipy.sparse import csr_matrix, isspmatrix
+import networkx as nx
+from normalization import aug_normalized_adjacency, row_normalize
 
 def main(args):
     step = args.step
     set_seed(args.seed)
-
-    f = np.load('../data/fake_graph.npz').files
-    adj, features, labels = f['arr_0'], f['arr_1'], f['arr_2']
-    # KH: specific steps for SGC 
     
-    features = torch.FloatTensor(np.array(features.todense())).float()
-    labels = torch.LongTensor(labels)
+    G=nx.read_adjlist("../data/fakegraph.adjlist")
+    C = nx.clustering(G)
+    
+    A = nx.adjacency_matrix(G)
+    adj = aug_normalized_adjacency(A)
+    
+    features = np.eye(adj.shape[0])
+    features = row_normalize(features)
+    
+    labels = np.zeros(A.shape[0], )
+    
+    tmp = np.array(list(C.values()))
+    label_count = 5
+    for i in range(label_count):
+        thr_down = np.percentile(tmp, i*(100/label_count))
+        thr_up = np.percentile(tmp,(i+1)*(100/label_count))
+        labels[np.where((tmp <= thr_up) & (tmp > thr_down))] = i
+    
+    adj = sparse_mx_to_torch_sparse_tensor(adj).float().cuda()
+     
+    features = torch.FloatTensor(features).float().cuda()
+    labels = torch.LongTensor(labels).cuda()
+    #print(adj)
+    #adj = sparse_mx_to_torch_sparse_tensor(adj).float()
 
     features = sgc_precompute(features, adj, args.degree)
 
     node_num = adj.shape[0]
-    class_label = list(np.unique(labels))
+    class_label = list(np.unique(labels.cpu() ))
     combination = list(combinations(class_label, 2))
-    adj = sparse_mx_to_torch_sparse_tensor(adj).float()
-
 
     config = [
         ('linear', [args.hidden, features.size(1)]),
@@ -50,7 +68,9 @@ def main(args):
             # KH: for each episode, sample tasks
             x_spt, y_spt, x_qry, y_qry = sgc_data_generator(features, labels, node_num, train_label, args.task_num, args.n_way, args.k_spt, args.k_qry)
             accs = maml.forward(x_spt, y_spt, x_qry, y_qry)
-            print('Step:', j, '\tMeta_Training_Accuracy:', accs)
+            
+            if j % 100 == 0: 
+                print('Step:', j, '\tMeta_Training_Accuracy:', accs)
             if j % 100 == 0:
                 # for every 100 steps, validate it. For testing, we need an additional set.
                 torch.save(maml.state_dict(), 'maml.pkl')
@@ -62,14 +82,7 @@ def main(args):
                     x_spt, y_spt, x_qry, y_qry = sgc_data_generator(features, labels, node_num, test_label, args.task_num, args.n_way, args.k_spt, args.k_qry)
                     accs = model_meta_trained.forward(x_spt, y_spt, x_qry, y_qry)
                     meta_test_acc.append(accs)
-                if args.dataset == 'citeseer':
-                    with open('citeseer.txt', 'a') as f:
-                        f.write('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
-                        f.write('\n')
-                elif args.dataset == 'cora':
-                    with open('cora.txt', 'a') as f:
-                        f.write('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
-                        f.write('\n')
+                print('Cross Validation:{}, Step: {}, Meta-Test_Accuracy: {}'.format(i+1, j, np.array(meta_test_acc).mean(axis=0).astype(np.float16)))
 
 
 if __name__ == '__main__':
