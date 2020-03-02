@@ -16,6 +16,12 @@ def mean_confidence_interval(accs, confidence=0.95):
     h = se * scipy.stats.t._ppf((1 + confidence) / 2, n - 1)
     return m, h
 
+def collate(samples):
+    # The input `samples` is a list of pairs
+    #  (graph, label).
+        graphs_spt, labels_spt, graph_qry, labels_qry = map(list, zip(*samples))
+
+        return graphs_spt, labels_spt, graph_qry, labels_qry
 
 def main():
 
@@ -24,7 +30,8 @@ def main():
     np.random.seed(222)
 
     print(args)
- 
+    
+    root = '../data/'
 
     device = torch.device('cuda')
     maml = Meta(args, config).to(device)
@@ -35,18 +42,21 @@ def main():
     print('Total trainable tensors:', num)
 
     # batchsz here means total episode number
-    mini = MiniImagenet('/home/i/tmp/MAML-Pytorch/miniimagenet/', mode='train', n_way=args.n_way, k_shot=args.k_spt,
-                        k_query=args.k_qry,
-                        batchsz=10000, resize=args.imgsz)
-    mini_test = MiniImagenet('/home/i/tmp/MAML-Pytorch/miniimagenet/', mode='test', n_way=args.n_way, k_shot=args.k_spt,
-                             k_query=args.k_qry,
-                             batchsz=100, resize=args.imgsz)
+    db_train = Subgraphs('../data/', mode='train',  n_way=args.n_way, k_shot=args.k_spt,
+                        k_query=args.k_qry, batchsz=1000)
+    db_val = Subgraphs('../data/', mode='val',  n_way=args.n_way, k_shot=args.k_spt,
+                    k_query=args.k_qry, batchsz=100)
+    db_test = Subgraphs('../data/', mode='test',  n_way=args.n_way, k_shot=args.k_spt,
+                k_query=args.k_qry, batchsz=100)
 
     for epoch in range(args.epoch//10000):
         # fetch meta_batchsz num of episode each time
-        db = DataLoader(mini, args.task_num, shuffle=True, num_workers=1, pin_memory=True)
+        db = DataLoader(db_train, args.task_num, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
 
         for step, (x_spt, y_spt, x_qry, y_qry) in enumerate(db):
+            
+            # x_spt: a list of #task_num tasks, where each task is a mini-batch of k-shot * n_way subgraphs
+            # y_spt: a list of #task_num lists of labels. Each list is of length k-shot * n_way int.
 
             x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
 
@@ -56,7 +66,7 @@ def main():
                 print('step:', step, '\ttraining acc:', accs)
 
             if step % 500 == 0:  # evaluation
-                db_test = DataLoader(mini_test, 1, shuffle=True, num_workers=1, pin_memory=True)
+                db_test = DataLoader(db_val, 1, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
                 accs_all_test = []
 
                 for x_spt, y_spt, x_qry, y_qry in db_test:
