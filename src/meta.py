@@ -15,7 +15,7 @@ class Meta(nn.Module):
     """
     Meta Learner
     """
-    def __init__(self, args):
+    def __init__(self, args, config):
         """
 
         :param args:
@@ -31,7 +31,7 @@ class Meta(nn.Module):
         self.update_step = args.update_step
         self.update_step_test = args.update_step_test
 
-        self.net = Classifier(args.in_dim, args.hidden_dim, args.n_way)
+        self.net = Classifier(config)
 
         self.meta_optim = optim.Adam(self.net.parameters(), lr=self.meta_lr)
 
@@ -74,7 +74,7 @@ class Meta(nn.Module):
         :return:
         """
         task_num = len(x_spt)
-        querysz = x_qry.size(1)
+        querysz = len(x_qry)
 
         losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
         corrects = [0 for _ in range(self.update_step + 1)]
@@ -83,7 +83,6 @@ class Meta(nn.Module):
         for i in range(task_num):
 
             # 1. run the i-th task and compute loss for k=0
-
             logits = self.net(x_spt[i], vars=None)
             loss = F.cross_entropy(logits, y_spt[i])
             grad = torch.autograd.grad(loss, self.net.parameters())

@@ -33,7 +33,14 @@ def main():
     
     root = '../data/'
 
-    device = torch.device('cuda')
+    config = [
+        ('GraphConv', [args.input_dim, args.hidden_dim]),
+        ('GraphConv', [args.hidden_dim, args.hidden_dim]),
+        ('Linear', [args.hidden_dim, args.n_way])
+    ]
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     maml = Meta(args, config).to(device)
 
     tmp = filter(lambda x: x.requires_grad, maml.parameters())
@@ -42,11 +49,11 @@ def main():
     print('Total trainable tensors:', num)
 
     # batchsz here means total episode number
-    db_train = Subgraphs('../data/', mode='train',  n_way=args.n_way, k_shot=args.k_spt,
+    db_train = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
                         k_query=args.k_qry, batchsz=1000)
-    db_val = Subgraphs('../data/', mode='val',  n_way=args.n_way, k_shot=args.k_spt,
+    db_val = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
                     k_query=args.k_qry, batchsz=100)
-    db_test = Subgraphs('../data/', mode='test',  n_way=args.n_way, k_shot=args.k_spt,
+    db_test = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
                 k_query=args.k_qry, batchsz=100)
 
     for epoch in range(args.epoch//10000):
@@ -58,7 +65,7 @@ def main():
             # x_spt: a list of #task_num tasks, where each task is a mini-batch of k-shot * n_way subgraphs
             # y_spt: a list of #task_num lists of labels. Each list is of length k-shot * n_way int.
 
-            x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
+            #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
 
             accs = maml(x_spt, y_spt, x_qry, y_qry)
 
@@ -85,16 +92,16 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--epoch', type=int, help='epoch number', default=60000)
-    argparser.add_argument('--n_way', type=int, help='n way', default=5)
+    argparser.add_argument('--n_way', type=int, help='n way', default=2)
     argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=1)
     argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=15)
-    argparser.add_argument('--imgsz', type=int, help='imgsz', default=84)
-    argparser.add_argument('--imgc', type=int, help='imgc', default=3)
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
     argparser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
     argparser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
     argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
+    argparser.add_argument('--input_dim', type=int, help='input feature dim', default=100)
+    argparser.add_argument('--hidden_dim', type=int, help='hidden dim', default=32)
 
     args = argparser.parse_args()
 

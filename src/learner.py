@@ -74,9 +74,10 @@ class Classifier(nn.Module):
         
         self.vars = nn.ParameterList()
         self.graph_conv = []
+        self.config = config
 
         for i, (name, param) in enumerate(self.config):
-            if name is 'linear':
+            if name is 'Linear':
                 w = nn.Parameter(torch.ones(*param))
                 # gain=1 according to cbfinn's implementation
                 init.kaiming_normal_(w)
@@ -116,14 +117,14 @@ class Classifier(nn.Module):
                 if idx_gcn == len(self.graph_conv):
                     hg = dgl.mean_nodes(g, 'h')
                             
-            if name is 'linear':
+            if name is 'Linear':
                 w, b = vars[idx], vars[idx + 1]
                 h = F.linear(h, w, b)
                 idx += 2
 
         
         return h
-        
+
     def zero_grad(self, vars=None):
         """
 
