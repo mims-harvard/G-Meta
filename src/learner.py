@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import dgl.function as fn
 import torch.nn as nn
 from torch.nn import init
-
+import dgl
 
 # Sends a message of node feature h.
 msg = fn.copy_src(src='h', out='m')
@@ -78,12 +78,12 @@ class Classifier(nn.Module):
 
         for i, (name, param) in enumerate(self.config):
             if name is 'Linear':
-                w = nn.Parameter(torch.ones(*param))
+                w = nn.Parameter(torch.ones(param[1], param[0]))
                 # gain=1 according to cbfinn's implementation
                 init.kaiming_normal_(w)
                 self.vars.append(w)
                 # [ch_out]
-                self.vars.append(nn.Parameter(torch.zeros(param[0])))
+                self.vars.append(nn.Parameter(torch.zeros(param[1])))
             if name is 'GraphConv':
                 # param: in_dim, hidden_dim
                 w = nn.Parameter(torch.Tensor(param[0], param[1]))
@@ -115,14 +115,13 @@ class Classifier(nn.Module):
                 idx_gcn += 1
                 
                 if idx_gcn == len(self.graph_conv):
-                    hg = dgl.mean_nodes(g, 'h')
+                    h = dgl.mean_nodes(g, 'h')
                             
             if name is 'Linear':
                 w, b = vars[idx], vars[idx + 1]
                 h = F.linear(h, w, b)
                 idx += 2
 
-        
         return h
 
     def zero_grad(self, vars=None):

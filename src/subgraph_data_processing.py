@@ -129,6 +129,7 @@ class Subgraphs(Dataset):
         :param y_qry:   [b, querysz]
 
         """
+        #print(self.support_x_batch[index])
 
         support_x = [self.subgraph_list[item]  # obtain a list of DGL subgraphs
                              for sublist in self.support_x_batch[index] for item in sublist]
@@ -165,12 +166,11 @@ class Subgraphs(Dataset):
         # print(support_set_y)
         # return support_x, torch.LongTensor(support_y), query_x, torch.LongTensor(query_y)
         '''
-
         # this is a set of subgraphs for one task.
         batched_graph_spt = dgl.batch(support_x)
         batched_graph_qry = dgl.batch(query_x)
 
-        return batched_graph_spt, torch.tensor(support_y_relative), batched_graph_qry, torch.tensor(query_y_relative)
+        return batched_graph_spt, torch.LongTensor(support_y_relative), batched_graph_qry, torch.LongTensor(query_y_relative)
 
     def __len__(self):
         # as we have built up to batchsz of sets, you can sample some small batch size of sets.
@@ -191,7 +191,7 @@ if __name__ == '__main__':
 
     plt.ion()
 
-    db = Subgraphs('../data/', mode='data', n_way=5, k_shot=1, k_query=1, batchsz=1000)
+    db = Subgraphs('../data/', mode='data', n_way=2, k_shot=1, k_query=15, batchsz=1000)
 
     db = DataLoader(db, 4, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
 

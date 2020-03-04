@@ -56,7 +56,7 @@ def main():
     db_test = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
                 k_query=args.k_qry, batchsz=100)
 
-    for epoch in range(args.epoch//10000):
+    for epoch in range(args.epoch//1000):
         # fetch meta_batchsz num of episode each time
         db = DataLoader(db_train, args.task_num, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
 
@@ -66,26 +66,25 @@ def main():
             # y_spt: a list of #task_num lists of labels. Each list is of length k-shot * n_way int.
 
             #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
-
             accs = maml(x_spt, y_spt, x_qry, y_qry)
 
             if step % 30 == 0:
-                print('step:', step, '\ttraining acc:', accs)
+                print('epoch:', epoch, 'step:', step, '\ttraining acc:', accs)
 
             if step % 500 == 0:  # evaluation
                 db_test = DataLoader(db_val, 1, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
                 accs_all_test = []
 
                 for x_spt, y_spt, x_qry, y_qry in db_test:
-                    x_spt, y_spt, x_qry, y_qry = x_spt.squeeze(0).to(device), y_spt.squeeze(0).to(device), \
-                                                 x_qry.squeeze(0).to(device), y_qry.squeeze(0).to(device)
+                    #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), \
+                    #                             x_qry.to(device), y_qry.to(device)
 
                     accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry)
                     accs_all_test.append(accs)
 
                 # [b, update_step+1]
                 accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
-                print('Test acc:', accs)
+                print('epoch:', epoch, 'Test acc:', accs)
 
 
 if __name__ == '__main__':
@@ -94,13 +93,13 @@ if __name__ == '__main__':
     argparser.add_argument('--epoch', type=int, help='epoch number', default=60000)
     argparser.add_argument('--n_way', type=int, help='n way', default=2)
     argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=1)
-    argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=15)
+    argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=12)
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
     argparser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
     argparser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
     argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
-    argparser.add_argument('--input_dim', type=int, help='input feature dim', default=100)
+    argparser.add_argument('--input_dim', type=int, help='input feature dim', default=1)
     argparser.add_argument('--hidden_dim', type=int, help='hidden dim', default=32)
 
     args = argparser.parse_args()

@@ -74,7 +74,7 @@ class Meta(nn.Module):
         :return:
         """
         task_num = len(x_spt)
-        querysz = len(x_qry)
+        querysz = len(y_qry[0])
 
         losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
         corrects = [0 for _ in range(self.update_step + 1)]
@@ -143,7 +143,7 @@ class Meta(nn.Module):
         # 	print(torch.norm(p).item())
         self.meta_optim.step()
 
-
+        #print(querysz *task_num)
         accs = np.array(corrects) / (querysz * task_num)
 
         return accs
@@ -159,14 +159,18 @@ class Meta(nn.Module):
         :return:
         """
 
-        querysz = x_qry.size(0)
+        querysz = len(y_qry[0])
 
         corrects = [0 for _ in range(self.update_step_test + 1)]
 
         # in order to not ruin the state of running_mean/variance and bn_weight/bias
         # we finetunning on the copied model instead of self.net
         net = deepcopy(self.net)
-
+        x_spt = x_spt[0]
+        y_spt = y_spt[0]
+        x_qry = x_qry[0]
+        y_qry = y_qry[0]
+        
         # 1. run the i-th task and compute loss for k=0
         logits = net(x_spt)
         loss = F.cross_entropy(logits, y_spt)
