@@ -31,7 +31,7 @@ def main():
 
     print(args)
     
-    root = '../data/'
+    root = '../data/fold1/'
 
     config = [
         ('GraphConv', [args.input_dim, args.hidden_dim]),
@@ -47,14 +47,20 @@ def main():
     num = sum(map(lambda x: np.prod(x.shape), tmp))
     print(maml)
     print('Total trainable tensors:', num)
+    
+    with open(root + 'list_subgraph.pkl', 'rb') as f:
+        total_subgraph = pickle.load(f)
+    
+    with open(root + 'label.pkl', 'rb') as f:
+        info = pickle.load(f)
 
+    with open(root + 'center.pkl', 'rb') as f:
+        center_node = pickle.load(f)  
+    
     # batchsz here means total episode number
-    db_train = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
-                        k_query=args.k_qry, batchsz=1000)
-    db_val = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
-                    k_query=args.k_qry, batchsz=100)
-    db_test = Subgraphs('../data/', mode='data',  n_way=args.n_way, k_shot=args.k_spt,
-                k_query=args.k_qry, batchsz=100)
+    db_train = Subgraphs(root, 'train', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt, k_query=args.k_qry, batchsz=1000)
+    db_val = Subgraphs(root, 'val', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
+    db_test = Subgraphs(root, 'test', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
 
     for epoch in range(args.epoch//1000):
         # fetch meta_batchsz num of episode each time

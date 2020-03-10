@@ -22,7 +22,7 @@ class Subgraphs(Dataset):
     sets: conains n_way * k_shot for meta-train set, n_way * n_query for meta-test set.
     """
 
-    def __init__(self, root,mode, batchsz, n_way, k_shot, k_query, path_s = 'list_subgraph.pkl', path_l = 'label.pkl'):
+    def __init__(self, root,mode, subgraph_list, subgraph2label, subgraph2center_node, n_way, k_shot, k_query, batchsz):
         """
 
         :param root: root path of mini-subgraphnet
@@ -43,14 +43,10 @@ class Subgraphs(Dataset):
         mode, batchsz, n_way, k_shot, k_query))
 
         # load subgraph list 
-        with open(os.path.join(root, path_s), 'rb') as f:
-            subgraph_list = pickle.load(f)
-
-        with open(os.path.join(root, path_l), 'rb') as f:
-            subgraph2label = pickle.load(f)    
 
         self.subgraph2label = subgraph2label
         self.subgraph_list = subgraph_list
+        self.subgraph2center_node = subgraph2center_node
 
         csvdata = self.loadCSV(os.path.join(root, mode + '.csv'))  # csv path
         self.data = []

@@ -7,6 +7,7 @@ import dgl
 
 # Sends a message of node feature h.
 msg = fn.copy_src(src='h', out='m')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # copied and editted from DGL Source 
 class GraphConv(nn.Module):
@@ -103,7 +104,7 @@ class Classifier(nn.Module):
         idx_gcn = 0
 
         h = g.in_degrees().view(-1, 1).float()
-        
+        h = h.to(device)
         for name, param in self.config:
             if name is 'GraphConv':
                 w, b = vars[idx], vars[idx + 1]
