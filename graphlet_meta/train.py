@@ -7,6 +7,14 @@ from    torch.optim import lr_scheduler
 import  random, sys, pickle
 import  argparse
 
+import networkx as nx
+import numpy as np
+from scipy.special import comb
+from itertools import combinations 
+import networkx.algorithms.isomorphism as iso
+from tqdm import tqdm
+import dgl
+
 from meta import Meta
 
 
@@ -23,6 +31,54 @@ def collate(samples):
 
         return graphs_spt, labels_spt, graph_qry, labels_qry, center_spt, center_qry
 
+# helper function to create any number of graphlets
+
+def generate_graphlet(n):
+    non_iso_graph = []
+    non_iso_graph_adj = []
+    dgl_graph = []
+    for i in tqdm(range(n-1, int(comb(n, 2))+1)):
+    # for each of these possible # of edges
+        arr = np.array(range(int((n**2-n)/2)))
+        all_comb = list(combinations(arr, i)) 
+        # all possible combination of edge positions 
+        indices = np.triu_indices(n, 1)
+        for m in range(len(all_comb)):
+            # iterate over all these graphs
+            adj = np.zeros((n,n))
+            adj[indices[0][np.array(all_comb[m])], indices[1][np.array(all_comb[m])]] = 1
+            adj_temp = adj
+            adj = adj + adj.T
+            #print(adj)
+            if sum(np.sum(adj_temp, axis = 0) == 0) == 1:
+                #the graph has to be connected
+                new_graph = nx.from_numpy_matrix(adj)
+                if len(non_iso_graph) == 0:
+                    non_iso_graph.append(new_graph)
+                    non_iso_graph_adj.append(adj)
+                    S = dgl.DGLGraph()
+                    S.from_networkx(new_graph)
+                    dgl_graph.append(S)
+                else:
+                    is_iso = False
+                    for g in non_iso_graph:
+                        if iso.is_isomorphic(g, new_graph):
+                            #print('yes')
+                            is_iso = True
+                            break
+                    if not is_iso:
+                        # not isomorphic to any of the current graphs
+                        non_iso_graph.append(new_graph)
+                        non_iso_graph_adj.append(adj)
+                        
+                        S = dgl.DGLGraph()
+                        S.from_networkx(new_graph)
+                        dgl_graph.append(S)
+                        
+    
+    print('There are {} non-isomorphic graphs'.format(len(non_iso_graph)))
+    return dgl_graph
+
 def main():
 
     torch.manual_seed(222)
@@ -33,10 +89,19 @@ def main():
     
     root = '../data/fold1/'
 
+    # create graphlets
+    graphs = []
+    for i in range(1, args.n_graphlets):
+            graphs = graphs + generate_graphlet(i+1)
+
+    print('There are {} number of graphlets'.format(len(graphs)))
+    graphlets = dgl.batch(graphs)
+
+
     config = [
         ('GraphConv', [args.input_dim, args.hidden_dim]),
         ('GraphConv', [args.hidden_dim, args.hidden_dim]),
-        ('Linear', [args.hidden_dim, args.n_way])
+        ('Attention', [args.hidden_dim, args.attention_size, args.hidden_dim, args.n_way, len(graphs)])
     ]
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -73,7 +138,7 @@ def main():
 
             #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
             
-            accs = maml(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry)
+            accs = maml(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
 
             if step % 30 == 0:
                 print('epoch:', epoch, 'step:', step, '\ttraining acc:', accs)
@@ -86,7 +151,7 @@ def main():
                     #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), \
                     #                             x_qry.to(device), y_qry.to(device)
 
-                    accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry)
+                    accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
                     accs_all_test.append(accs)
 
                 # [b, update_step+1]
@@ -108,6 +173,8 @@ if __name__ == '__main__':
     argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
     argparser.add_argument('--input_dim', type=int, help='input feature dim', default=1)
     argparser.add_argument('--hidden_dim', type=int, help='hidden dim', default=32)
+    argparser.add_argument('--attention_size', type=int, help='dim of attention_size', default=32)
+    argparser.add_argument('--n_graphlets', type=int, help='up to n number of nodes in the graphlets', default=5)
 
     args = argparser.parse_args()
 

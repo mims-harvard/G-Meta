@@ -61,7 +61,7 @@ class Meta(nn.Module):
         return total_norm/counter
 
 
-    def forward(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry):
+    def forward(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets):
         """
         b: number of tasks
         setsz: the size for each task
@@ -81,7 +81,7 @@ class Meta(nn.Module):
         for i in range(task_num):
 
             # 1. run the i-th task and compute loss for k=0
-            logits = self.net(x_spt[i].to(device), c_spt[i].to(device), vars=None)
+            logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, vars=None)
             loss = F.cross_entropy(logits, y_spt[i].to(device))
             grad = torch.autograd.grad(loss, self.net.parameters())
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, self.net.parameters())))
@@ -89,7 +89,7 @@ class Meta(nn.Module):
             # this is the loss and accuracy before first update
             with torch.no_grad():
                 # [setsz, nway]
-                logits_q = self.net(x_qry[i].to(device), c_qry[i].to(device), self.net.parameters())
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, self.net.parameters())
                 loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
                 losses_q[0] += loss_q
 
@@ -100,7 +100,7 @@ class Meta(nn.Module):
             # this is the loss and accuracy after the first update
             with torch.no_grad():
                 # [setsz, nway]
-                logits_q = self.net(x_qry[i].to(device), c_qry[i].to(device), fast_weights)
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, fast_weights)
                 loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
                 losses_q[1] += loss_q
                 # [setsz]
@@ -110,14 +110,14 @@ class Meta(nn.Module):
 
             for k in range(1, self.update_step):
                 # 1. run the i-th task and compute loss for k=1~K-1
-                logits = self.net(x_spt[i].to(device), c_spt[i].to(device), fast_weights)
+                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, fast_weights)
                 loss = F.cross_entropy(logits, y_spt[i].to(device))
                 # 2. compute grad on theta_pi
                 grad = torch.autograd.grad(loss, fast_weights)
                 # 3. theta_pi = theta_pi - train_lr * grad
                 fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
 
-                logits_q = self.net(x_qry[i].to(device), c_qry[i].to(device), fast_weights)
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, fast_weights)
                 # loss_q will be overwritten and just keep the loss_q on last update step.
                 loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
                 losses_q[k + 1] += loss_q
@@ -147,7 +147,7 @@ class Meta(nn.Module):
         return accs
 
 
-    def finetunning(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry):
+    def finetunning(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets):
         """
 
         :param x_spt:   [setsz, c_, h, w]
@@ -172,7 +172,7 @@ class Meta(nn.Module):
         c_qry = c_qry[0]
         
         # 1. run the i-th task and compute loss for k=0
-        logits = net(x_spt.to(device), c_spt.to(device))
+        logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets)
         loss = F.cross_entropy(logits, y_spt.to(device))
         grad = torch.autograd.grad(loss, net.parameters())
         fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, net.parameters())))
@@ -180,7 +180,7 @@ class Meta(nn.Module):
         # this is the loss and accuracy before first update
         with torch.no_grad():
             # [setsz, nway]
-            logits_q = net(x_qry.to(device), c_qry.to(device), net.parameters())
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, net.parameters())
             # [setsz]
             pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
             # scalar
@@ -190,7 +190,7 @@ class Meta(nn.Module):
         # this is the loss and accuracy after the first update
         with torch.no_grad():
             # [setsz, nway]
-            logits_q = net(x_qry.to(device), c_qry.to(device), fast_weights)
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, fast_weights)
             # [setsz]
             pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
             # scalar
@@ -199,14 +199,14 @@ class Meta(nn.Module):
 
         for k in range(1, self.update_step_test):
             # 1. run the i-th task and compute loss for k=1~K-1
-            logits = net(x_spt.to(device), c_spt.to(device), fast_weights)
+            logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, fast_weights)
             loss = F.cross_entropy(logits, y_spt.to(device))
             # 2. compute grad on theta_pi
             grad = torch.autograd.grad(loss, fast_weights)
             # 3. theta_pi = theta_pi - train_lr * grad
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
 
-            logits_q = net(x_qry.to(device), c_qry.to(device), fast_weights)
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, fast_weights)
             # loss_q will be overwritten and just keep the loss_q on last update step.
             loss_q = F.cross_entropy(logits_q, y_qry.to(device))
 
