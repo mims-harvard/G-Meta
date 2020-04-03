@@ -127,39 +127,40 @@ def main():
     db_val = Subgraphs(root, 'val', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
     db_test = Subgraphs(root, 'test', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
 
-    for epoch in range(args.epoch):
-        # fetch meta_batchsz num of episode each time
+    if args.no_finetune == 'no':
+        for epoch in range(args.epoch):
+            # fetch meta_batchsz num of episode each time
 
-        # each episode(epoch) consists of 1000 batches, where each batch is a task, each task consists of support and query 
-        db = DataLoader(db_train, args.task_num, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
+            # each episode(epoch) consists of 1000 batches, where each batch is a task, each task consists of support and query 
+            db = DataLoader(db_train, args.task_num, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
 
-        for step, (x_spt, y_spt, x_qry, y_qry, c_spt, c_qry) in enumerate(db):
-            
-            # x_spt: a list of #task_num tasks, where each task is a mini-batch of k-shot * n_way subgraphs
-            # y_spt: a list of #task_num lists of labels. Each list is of length k-shot * n_way int.
+            for step, (x_spt, y_spt, x_qry, y_qry, c_spt, c_qry) in enumerate(db):
+                
+                # x_spt: a list of #task_num tasks, where each task is a mini-batch of k-shot * n_way subgraphs
+                # y_spt: a list of #task_num lists of labels. Each list is of length k-shot * n_way int.
 
-            #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
-            
-            accs = maml(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
+                #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), x_qry.to(device), y_qry.to(device)
+                
+                accs = maml(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
 
-            if step % 30 == 0:
-                print('epoch:', epoch, 'step:', step, '\ttraining acc:', accs)
+                if step % 30 == 0:
+                    print('epoch:', epoch, 'step:', step, '\ttraining acc:', accs)
 
-            if step % 500 == 0:  # evaluation
-                db_v = DataLoader(db_val, 1, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
-                accs_all_test = []
+                if step % 500 == 0:  # evaluation
+                    db_v = DataLoader(db_val, 1, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
+                    accs_all_test = []
 
-                for x_spt, y_spt, x_qry, y_qry, c_spt, c_qry in db_v:
-                    #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), \
-                    #                             x_qry.to(device), y_qry.to(device)
+                    for x_spt, y_spt, x_qry, y_qry, c_spt, c_qry in db_v:
+                        #x_spt, y_spt, x_qry, y_qry = x_spt.to(device), y_spt.to(device), \
+                        #                             x_qry.to(device), y_qry.to(device)
 
-                    accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
-                    accs_all_test.append(accs)
+                        accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets)
+                        accs_all_test.append(accs)
 
-                # [b, update_step+1]
-                accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
-                print('epoch:', epoch, 'Val acc:', accs)
-    
+                    # [b, update_step+1]
+                    accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
+                    print('epoch:', epoch, 'Val acc:', accs)
+        
     db_t = DataLoader(db_test, 1, shuffle=True, num_workers=1, pin_memory=True, collate_fn = collate)
     accs_all_test = []
 
@@ -177,8 +178,8 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--epoch', type=int, help='epoch number', default=20)
-    argparser.add_argument('--n_way', type=int, help='n way', default=2)
-    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=1)
+    argparser.add_argument('--n_way', type=int, help='n way', default=10)
+    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=32)
     argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=12)
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
@@ -191,6 +192,7 @@ if __name__ == '__main__':
     argparser.add_argument('--n_graphlets', type=int, help='up to n number of nodes in the graphlets', default=5)
     argparser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir.")
     argparser.add_argument('--fold_n', type=int, help='fold number', default=1)
+    argparser.add_argument("--no_finetune", default='no', type=str, required=True, help="no finetune mode.")
 
     args = argparser.parse_args()
 

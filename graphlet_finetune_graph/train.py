@@ -177,8 +177,8 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--epoch', type=int, help='epoch number', default=20)
-    argparser.add_argument('--n_way', type=int, help='n way', default=2)
-    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=1)
+    argparser.add_argument('--n_way', type=int, help='n way', default=10)
+    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=32)
     argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=12)
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
