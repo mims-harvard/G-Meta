@@ -4,10 +4,10 @@ import argparse
 
 def get_citation_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_shot', type=int, default=20, help='How many shot during meta-train')
+    parser.add_argument('--train_shot', type=int, default=1, help='How many shot during meta-train')
     parser.add_argument('--test_shot', type=int, default=1, help='How many shot during meta-test')
     parser.add_argument('--n_way', type=int, default=2, help='Classes want to be classify')
-    parser.add_argument('--step', type=int, default=50, help='How many times to random select node to test')
+    parser.add_argument('--step', type=int, default=100, help='How many times to random select node to test')
     parser.add_argument('--node_num', type=int, default=2708, help='Node number (dataset)')
     parser.add_argument('--iteration', type=int, default=50, help='Iteration each cross_validation')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='Disable CUDA training.')
@@ -21,6 +21,8 @@ def get_citation_args():
     parser.add_argument('--model', type=str, default='GCN', help='Model to use.')
     parser.add_argument('--normalization', type=str, default='FirstOrderGCN', help='Normalization method for the adjacency matrix.')
     parser.add_argument('--degree', type=int, default=2, help='degree of the approximation.')
+    parser.add_argument('--data_dir', type=str, help='Dataset to use.')
+    parser.add_argument('--fold_n', type=int, default=1, help='fold number')
 
     args, _ = parser.parse_known_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

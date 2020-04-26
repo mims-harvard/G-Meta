@@ -6,9 +6,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dgl import DGLGraph
+import dgl
 from dgl.data import register_data_args, load_data
 import dgl.function as fn
 from itertools import combinations
+import networkx as nx
+import pandas as pd
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Aggregator(nn.Module):
@@ -157,9 +162,12 @@ def train_regression(model, features, labels_local, train_idx, epochs, weight_de
     for epoch in range(epochs):
         model.train()
         logits = model(features)
+        #print(logits)
         loss = loss_fcn(logits[train_idx], labels_local[train_idx])
+        #print(loss)
         optimizer.zero_grad()
         loss.backward()
+        optimizer.step()
     return model
 
 
@@ -171,14 +179,35 @@ def test_regression(model, test_features, test_labels, idx_test):
 def main(args):
     train_shot = args.train_shot
     test_shot = args.test_shot
-    data = load_data(args)
-    features = torch.FloatTensor(data.features)
-    labels = torch.LongTensor(data.labels)
-    train_mask = torch.ByteTensor(data.train_mask)
-    val_mask = torch.ByteTensor(data.val_mask)
-    test_mask = torch.ByteTensor(data.test_mask)
+    iteration = 15
+
+    G = nx.from_numpy_matrix(np.load(args.data_dir + 'graph_adj.npy'))
+    adj = nx.adjacency_matrix(G)
+    #adj = aug_normalized_adjacency(A)
+
+    features = np.eye(adj.shape[0])
+    labels = pd.read_csv(args.data_dir + 'data.csv')
+    labels = labels.label.values
+     
+    features = torch.FloatTensor(features).float().to(device)
+    labels = torch.LongTensor(labels).to(device)
+
+    node_num = adj.shape[0]
+    class_label = list(np.unique(labels.cpu()))
+    combination = list(combinations(class_label, 2))
+
+    train_file = pd.read_csv(args.data_dir + '/fold' + str(args.fold_n) + '/train.csv')
+    test_file = pd.read_csv(args.data_dir + '/fold' + str(args.fold_n) + '/test.csv')
+
+    test_label = list(np.unique(test_file.label.values))
+    train_label = list(np.unique(train_file.label.values))
+
+    print('Train_Label_List {}: '.format(train_label))
+    print('Test_Label_List {}: '.format(test_label))
+
     in_feats = features.shape[1]
     n_classes = 2
+
     if args.gpu < 0:
         cuda = False
     else:
@@ -186,125 +215,91 @@ def main(args):
         torch.cuda.set_device(args.gpu)
         features = features.cuda()
         labels = labels.cuda()
-        train_mask = train_mask.cuda()
-        val_mask = val_mask.cuda()
-        test_mask = test_mask.cuda()
         print("use cuda:", args.gpu)
 
-    g = DGLGraph(data.graph)
+    g = dgl.DGLGraph()
+    g.from_networkx(G)
+
     step = 50
     total_accuracy_meta_test = []
     accuracy_meta_test = []
-    if args.dataset == 'cora':
-        node_num = 2708
-        iteration = 50
-        class_label = [0, 1, 2, 3, 4, 5, 6]
-        combination = list(combinations(class_label, n_classes))
-    elif args.dataset == 'citeseer':
-        node_num = 3327
-        iteration = 15
-        class_label = [0, 1, 2, 3, 4, 5]
-        combination = list(combinations(class_label, n_classes))
+    
+    print('Train_Label_List {}: '.format(train_label))
+    print('Test_Label_List {}: '.format(test_label))
+    model = GraphSAGE(g, in_feats, args.n_hidden, n_classes, args.n_layers, F.relu, args.dropout, args.aggregator_type)
+    if cuda:
+        model.cuda()
 
-    for i in range(len(combination)):
-        print('Cross_Validation: ',i+1)
-        test_label = list(combination[i])
-        train_label = [n for n in class_label if n not in test_label]
-        print('Cross_Validation {} Train_Label_List {}: '.format(i + 1, train_label))
-        print('Cross_Validation {} Test_Label_List {}: '.format(i + 1, test_label))
-        model = GraphSAGE(g, in_feats, args.n_hidden, n_classes, args.n_layers, F.relu, args.dropout, args.aggregator_type)
-        if cuda:
-            model.cuda()
-
-        for j in range(iteration):
-            labels_local = labels.clone().detach()
-            select_class = random.sample(train_label, n_classes)
-            print('EPOCH {} ITERATION {} Train_Label: {}'.format(i+1, j+1, select_class))
-            class1_idx = []
-            class2_idx = []
-            for k in range(node_num):
-                if(labels_local[k] == select_class[0]):
-                    class1_idx.append(k)
-                    labels_local[k] = 0
-                elif(labels_local[k] == select_class[1]):
-                    class2_idx.append(k)
-                    labels_local[k] = 1
-            for m in range(50):
-                class1_train = random.sample(class1_idx, train_shot)
-                class2_train = random.sample(class2_idx, train_shot)
-                class1_test = [n1 for n1 in class1_idx if n1 not in class1_train]
-                class2_test = [n2 for n2 in class2_idx if n2 not in class2_train]
-                train_idx = class1_train + class2_train
-                random.shuffle(train_idx)
-                test_idx = class1_test + class2_test
-                random.shuffle(test_idx)
-                model = train_regression(model, features, labels_local, train_idx, args.n_epochs, args.weight_decay, args.lr)
-                acc_query = test_regression(model, features, labels_local, test_idx)
-                accuracy_meta_test.append(acc_query)
-                reset_array()
-        print('Cross_Validation: {} Meta-Train_Accuracy: {}'.format(i + 1, torch.tensor(accuracy_meta_test).numpy().mean()))
-        accuracy_meta_test = []
-        torch.save(model.state_dict(), 'model.pkl')
-
+    for j in range(iteration):
         labels_local = labels.clone().detach()
-        select_class = random.sample(test_label, 2)
-        print('EPOCH {} Test_Label {}: '.format(i + 1, select_class))
+        select_class = random.sample(train_label, n_classes)
+        print('ITERATION {} Train_Label: {}'.format(j+1, select_class))
         class1_idx = []
         class2_idx = []
-        reset_array()
         for k in range(node_num):
-            if (labels_local[k] == select_class[0]):
+            if(labels_local[k] == select_class[0]):
                 class1_idx.append(k)
                 labels_local[k] = 0
-            elif (labels_local[k] == select_class[1]):
+            elif(labels_local[k] == select_class[1]):
                 class2_idx.append(k)
                 labels_local[k] = 1
-        for m in range(step):
-            class1_train = random.sample(class1_idx, test_shot)
-            class2_train = random.sample(class2_idx, test_shot)
+        for m in range(50):
+            random.seed(m)
+            class1_train = random.sample(class1_idx, train_shot)
+            class2_train = random.sample(class2_idx, train_shot)
+            #print(class1_train)
+            #print(class2_train)
             class1_test = [n1 for n1 in class1_idx if n1 not in class1_train]
             class2_test = [n2 for n2 in class2_idx if n2 not in class2_train]
             train_idx = class1_train + class2_train
             random.shuffle(train_idx)
             test_idx = class1_test + class2_test
             random.shuffle(test_idx)
-
-            model_meta_trained = GraphSAGE(g, in_feats, args.n_hidden, n_classes, args.n_layers, F.relu, args.dropout, args.aggregator_type)
-            if cuda:
-                model_meta_trained.cuda()
-            model_meta_trained.load_state_dict(torch.load('model.pkl'))
-
-            model_meta_trained = train_regression(model_meta_trained, features, labels_local, train_idx, args.n_epochs, args.weight_decay, args.lr)
-            acc_test = test_regression(model_meta_trained, features, labels_local, test_idx)
-            accuracy_meta_test.append(acc_test)
-            total_accuracy_meta_test.append(acc_test)
+            model = train_regression(model, features, labels_local, train_idx, args.n_epochs, args.weight_decay, args.lr)
+            acc_query = test_regression(model, features, labels_local, test_idx)
+            accuracy_meta_test.append(acc_query)
+            print('Train query accuracy one class combo: ', acc_query)
             reset_array()
-        if args.dataset == 'cora':
-            with open('pool_cora.txt', 'a') as f:
-                f.write('Cross_Validation: {} Meta-Test_Accuracy: {}'.format(i + 1, torch.tensor(
-                    accuracy_meta_test).numpy().mean()))
-                f.write('\n')
-        elif args.dataset == 'citeseer':
-            with open('pool_citeseer.txt', 'a') as f:
-                f.write('Cross_Validation: {} Meta-Test_Accuracy: {}'.format(i + 1, torch.tensor(
-                    accuracy_meta_test).numpy().mean()))
-                f.write('\n')
-        accuracy_meta_test = []
+    print('Meta-Train_Accuracy: {}'.format(torch.tensor(accuracy_meta_test).numpy().mean()))
+    accuracy_meta_test = []
+    torch.save(model.state_dict(), 'model.pkl')
 
-    if args.dataset == 'cora':
-        with open('pool_cora.txt', 'a') as f:
-            f.write('Dataset: {}, Train_Shot: {}, Test_Shot: {}'.format(args.dataset, train_shot, test_shot))
-            f.write('\n')
-            f.write('Total_Meta-Test_Accuracy: {}'.format(torch.tensor(total_accuracy_meta_test).numpy().mean()))
-            f.write('\n')
-            f.write('\n\n\n')
-    elif args.dataset == 'citeseer':
-        with open('pool_citeseer.txt', 'a') as f:
-            f.write('Dataset: {}, Train_Shot: {}, Test_Shot: {}'.format(args.dataset, train_shot, test_shot))
-            f.write('\n')
-            f.write('Total_Meta-Test_Accuracy: {}'.format(torch.tensor(total_accuracy_meta_test).numpy().mean()))
-            f.write('\n')
-            f.write('\n\n\n')
+    labels_local = labels.clone().detach()
+    select_class = random.sample(test_label, 2)
+    print('Test_Label {}: '.format(select_class))
+    class1_idx = []
+    class2_idx = []
+    reset_array()
+    for k in range(node_num):
+        if (labels_local[k] == select_class[0]):
+            class1_idx.append(k)
+            labels_local[k] = 0
+        elif (labels_local[k] == select_class[1]):
+            class2_idx.append(k)
+            labels_local[k] = 1
+    for m in range(step):
+        random.seed(m)
+        class1_train = random.sample(class1_idx, test_shot)
+        class2_train = random.sample(class2_idx, test_shot)
+        class1_test = [n1 for n1 in class1_idx if n1 not in class1_train]
+        class2_test = [n2 for n2 in class2_idx if n2 not in class2_train]
+        train_idx = class1_train + class2_train
+        random.shuffle(train_idx)
+        test_idx = class1_test + class2_test
+        random.shuffle(test_idx)
+
+        model_meta_trained = GraphSAGE(g, in_feats, args.n_hidden, n_classes, args.n_layers, F.relu, args.dropout, args.aggregator_type)
+        if cuda:
+            model_meta_trained.cuda()
+        model_meta_trained.load_state_dict(torch.load('model.pkl'))
+
+        model_meta_trained = train_regression(model_meta_trained, features, labels_local, train_idx, args.n_epochs, args.weight_decay, args.lr)
+        acc_test = test_regression(model_meta_trained, features, labels_local, test_idx)
+        accuracy_meta_test.append(acc_test)
+        total_accuracy_meta_test.append(acc_test)
+        reset_array()
+    print('Test query accuracy one class combo: ', total_accuracy_meta_test)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='GCN')
@@ -315,7 +310,7 @@ if __name__ == '__main__':
                         help="gpu")
     parser.add_argument("--lr", type=float, default=1e-2,
                         help="learning rate")
-    parser.add_argument("--n-epochs", type=int, default=200,
+    parser.add_argument("--n-epochs", type=int, default=5,
                         help="number of training epochs")
     parser.add_argument("--n-hidden", type=int, default=16,
                         help="number of hidden gcn units")
@@ -325,9 +320,13 @@ if __name__ == '__main__':
                         help="Weight for L2 loss")
     parser.add_argument("--aggregator-type", type=str, default="mean",
                         help="Weight for L2 loss")
-    parser.add_argument('--train_shot', type=int, default=20, help='How many shot during meta-train')
+    parser.add_argument('--train_shot', type=int, default=1, help='How many shot during meta-train')
     parser.add_argument('--test_shot', type=int, default=1, help='How many shot during meta-test')
+    parser.add_argument('--data_dir', type=str, help='Dataset to use.')
+    parser.add_argument('--fold_n', type=int, default=1, help='fold number')
     args = parser.parse_args()
     print(args)
 
     main(args)
+
+        

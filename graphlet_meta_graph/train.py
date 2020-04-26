@@ -127,7 +127,7 @@ def main():
     db_val = Subgraphs(root, 'val', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
     db_test = Subgraphs(root, 'test', total_subgraph, info, center_node, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100)
 
-    if args.no_finetune == 'no':
+    if args.no_finetune:
         for epoch in range(args.epoch):
             # fetch meta_batchsz num of episode each time
 
@@ -179,8 +179,8 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--epoch', type=int, help='epoch number', default=20)
     argparser.add_argument('--n_way', type=int, help='n way', default=10)
-    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=32)
-    argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=12)
+    argparser.add_argument('--k_spt', type=int, help='k shot for support set', default=16)
+    argparser.add_argument('--k_qry', type=int, help='k shot for query set', default=8)
     argparser.add_argument('--task_num', type=int, help='meta batch size, namely task num', default=4)
     argparser.add_argument('--meta_lr', type=float, help='meta-level outer learning rate', default=1e-3)
     argparser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     argparser.add_argument('--n_graphlets', type=int, help='up to n number of nodes in the graphlets', default=5)
     argparser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir.")
     argparser.add_argument('--fold_n', type=int, help='fold number', default=1)
-    argparser.add_argument("--no_finetune", default='no', type=str, required=True, help="no finetune mode.")
+    argparser.add_argument("--no_finetune", default=True, type=str, required=False, help="no finetune mode.")
 
     args = argparser.parse_args()
 
