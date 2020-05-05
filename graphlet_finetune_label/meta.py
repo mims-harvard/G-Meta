@@ -62,7 +62,7 @@ class Meta(nn.Module):
         return total_norm/counter
 
 
-    def forward(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, graphlets):
+    def forward(self, x_spt, y_spt, c_spt, graphlets):
         """
         b: number of tasks
         setsz: the size for each task
@@ -73,8 +73,7 @@ class Meta(nn.Module):
         :param y_qry:   [b, querysz]
         :return:
         """
-        task_num = len(x_spt)
-        querysz = len(y_qry[0])
+        #task_num = len(x_spt)
 
         losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
         corrects = [0 for _ in range(self.update_step + 1)]
@@ -88,34 +87,20 @@ class Meta(nn.Module):
 
         #fast_weights = self.net.parameters()
 
-        for i in range(task_num):
-            '''
-            # this is the loss and accuracy before first update
+        #for i in range(task_num):
+            
+
+        for k in range(1, self.update_step):
+            logits, _ = self.net(x_spt.to(device), c_spt.to(device), graphlets)
+            loss = F.cross_entropy(logits, y_spt.to(device))
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
+
             with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, fast_weights)
-                loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-                losses_q[0] += loss_q
-
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-                corrects[0] = corrects[0] + correct
-            '''
-
-            for k in range(1, self.update_step):
-                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets)
-                loss = F.cross_entropy(logits, y_spt[i].to(device))
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
-
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets)
-                loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-
-                with torch.no_grad():
-                    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                    correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()  # convert to numpy
-                    corrects[k] = corrects[k] + correct
+                pred = F.softmax(logits, dim=1).argmax(dim=1)
+                correct = torch.eq(pred, y_spt.to(device)).sum().item()  # convert to numpy
+                corrects[k] = corrects[k] + correct
 
 
         # end of all tasks
@@ -131,7 +116,7 @@ class Meta(nn.Module):
         #self.meta_optim.step()
 
         #print(querysz *task_num)
-        accs = np.array(corrects) / (querysz * task_num)
+        accs = np.array(corrects) / len(x_spt)
 
         return accs
 

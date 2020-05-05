@@ -3,11 +3,17 @@ import torch.nn.functional as F
 import torch.optim as optim
 from itertools import combinations
 import random
-
+import networkx as nx
+import numpy as np
+import pandas as pd
 from args import get_citation_args
-from utils import load_citation, sgc_precompute, set_seed
+from utils import load_citation, set_seed
 from models import get_model
 from metrics import accuracy
+from normalization import aug_normalized_adjacency, row_normalize
+from utils import sparse_mx_to_torch_sparse_tensor, sgc_precompute, set_seed
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def train_regression(model, train_features, train_labels, epochs, weight_decay, lr):
@@ -65,6 +71,8 @@ def main():
      
     features = torch.FloatTensor(features).float().to(device)
     labels = torch.LongTensor(labels).to(device)
+    
+    accuracy_meta_test = []
 
     node_num = adj.shape[0]
     class_label = list(np.unique(labels.cpu()))
@@ -84,8 +92,10 @@ def main():
     model = get_model(args.model, features.size(1), n_way, args.cuda)
 
     for j in range(iteration):
+        random.seed(j)
         labels_local = labels.clone().detach()
         select_class = random.sample(train_label, n_way)
+        print('ITERATION {} Train_Label: {}'.format(j+1, select_class))
 
         class1_idx = []
         class2_idx = []
@@ -97,6 +107,7 @@ def main():
                 class2_idx.append(k)
                 labels_local[k] = 1
         for m in range(step):
+            random.seed(m)
             class1_train = random.sample(class1_idx,train_shot)
             class2_train = random.sample(class2_idx,train_shot)
             class1_test = [n1 for n1 in class1_idx if n1 not in class1_train]
@@ -108,9 +119,10 @@ def main():
 
             model = train_regression(model, features[train_idx], labels_local[train_idx], args.epochs, args.weight_decay, args.lr)
             acc_query = test_regression(model, features[test_idx], labels_local[test_idx])
+            accuracy_meta_test.append(acc_query)
             reset_array()
         
-        print('training query accuracy:', acc_query)
+    print('Meta-Train_Accuracy: {}'.format(torch.tensor(accuracy_meta_test).numpy().mean()))
 
     torch.save(model.state_dict(), 'model.pkl')
 
@@ -127,7 +139,8 @@ def main():
             class2_idx.append(k)
             labels_local[k] = 1
 
-    for m in range(step):
+    for m in range(100): # average from 100 datapoints
+        random.seed(m)
         class1_train = random.sample(class1_idx, test_shot)
         class2_train = random.sample(class2_idx, test_shot)
         class1_test = [n1 for n1 in class1_idx if n1 not in class1_train]
@@ -137,16 +150,20 @@ def main():
         test_idx = class1_test + class2_test
         random.shuffle(test_idx)
 
-        model_meta_trained = get_model(args.model, features.size(1), n_way, args.cuda).cuda()
+        model_meta_trained = get_model(args.model, features.size(1), n_way, args.cuda)
         model_meta_trained.load_state_dict(torch.load('model.pkl'))
+
+        
+        accs = []
 
         model_meta_trained = train_regression(model_meta_trained, features[train_idx], labels_local[train_idx], args.epochs, args.weight_decay, args.lr)
         acc_test = test_regression(model_meta_trained, features[test_idx], labels_local[test_idx])
-        accuracy_meta_test.append(acc_test)
-        total_accuracy_meta_test.append(acc_test)
+        accs.append(acc_test)
+        total_accuracy_meta_test.append(accs)
         reset_array()
-    print('testing accuracy: ', np.array(total_accuracy_meta_test).mean(axis=0).astype(np.float16))
 
+    #print(total_accuracy_meta_test)
+    print('Test query accuracy: ', np.mean(np.array(total_accuracy_meta_test), axis = 0))
 
 
 if __name__ == '__main__':
