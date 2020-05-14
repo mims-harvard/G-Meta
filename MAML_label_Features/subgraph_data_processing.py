@@ -22,7 +22,7 @@ class Subgraphs(Dataset):
     sets: conains n_way * k_shot for meta-train set, n_way * n_query for meta-test set.
     """
 
-    def __init__(self, root, mode, subgraph_list, subgraph2label, subgraph2center_node, n_way, k_shot, k_query, batchsz):
+    def __init__(self, root,mode, subgraph_list, subgraph2label, subgraph2center_node, subgraph2nodeidx, n_way, k_shot, k_query, batchsz):
         """
 
         :param root: root path of mini-subgraphnet
@@ -34,7 +34,7 @@ class Subgraphs(Dataset):
         """
 
         self.batchsz = batchsz  # batch of set, not batch of subgraphs
-        self.n_way = n_way
+        self.n_way = n_way  # n-way
         self.k_shot = k_shot  # k-shot
         self.k_query = k_query  # for evaluation
         self.setsz = self.n_way * self.k_shot  # num of samples per set
@@ -47,26 +47,15 @@ class Subgraphs(Dataset):
         self.subgraph2label = subgraph2label
         self.subgraph_list = subgraph_list
         self.subgraph2center_node = subgraph2center_node
+        self.subgraph2nodeidx = subgraph2nodeidx
 
-        csvdata, dictGraphs = self.loadCSV(os.path.join(root, mode + '.csv'))  # csv path
-        self.data_graph = []
-
-        for i, (k, v) in enumerate(dictGraphs.items()):
-            self.data_graph.append(v)
-        self.graph_num = len(self.data_graph)
-
-        self.data_label = [[] for i in range(self.graph_num)]
-
-        relative_idx_map = dict(zip(list(dictGraphs.keys()), range(len(list(dictGraphs.keys())))))
+        csvdata = self.loadCSV(os.path.join(root, mode + '.csv'))  # csv path
+        self.data = []
 
         for i, (k, v) in enumerate(csvdata.items()):
-            #self.data_label[k] = []
-            for m, n in v.items():
-
-                self.data_label[relative_idx_map[k]].append(n)  # [(graph 1)[(label1)[subgraph1, subgraph2, ...], (label2)[subgraph111, ...]], graph2: [[subgraph1, subgraph2, ...], [subgraph111, ...]] ]
+            self.data.append(v)  # [[subgraph1, subgraph2, ...], [subgraph111, ...]]
             #self.subgraph2label[k] = i + self.startidx  # {"subgraph_name[:9]":label}
-        self.cls_num = len(self.data_label[0])
-        self.graph_num = len(self.data_graph)
+        self.cls_num = len(self.data)
 
         self.create_batch(self.batchsz)
 
@@ -77,28 +66,18 @@ class Subgraphs(Dataset):
         :return: {label:[file1, file2 ...]}
         """
         dictLabels = {}
-        dictGraphs = {}
         with open(csvf) as csvfile:
             csvreader = csv.reader(csvfile, delimiter=',')
             next(csvreader, None)  # skip (filename, label)
             for i, row in enumerate(csvreader):
                 filename = row[1]
-                g_idx = int(filename.split('_')[0])
                 label = row[2]
                 # append filename to current label
-
-                if g_idx in dictGraphs.keys():
-                    dictGraphs[g_idx].append(filename)
+                if label in dictLabels.keys():
+                    dictLabels[label].append(filename)
                 else:
-                    dictGraphs[g_idx] = [filename]
-                    dictLabels[g_idx] = {}
-
-                if label in dictLabels[g_idx].keys():
-                    dictLabels[g_idx][label].append(filename)
-                else:
-                    dictLabels[g_idx][label] = [filename]
-
-        return dictLabels, dictGraphs
+                    dictLabels[label] = [filename]
+        return dictLabels
 
     def create_batch(self, batchsz):
         """
@@ -108,55 +87,31 @@ class Subgraphs(Dataset):
         """
         self.support_x_batch = []  # support set batch
         self.query_x_batch = []  # query set batch
-        for b in range(batchsz):  # one loop generates one task
+        for b in range(batchsz):  # for each batch
             # 1.select n_way classes randomly
             #print(self.cls_num)
             #print(self.n_way)
-            
-            selected_graph = np.random.choice(self.graph_num, 1, False)[0]  # select one graph
-
-            selected_cls = np.array(list(range(self.cls_num)))  # no duplicate
+            selected_cls = np.random.choice(self.cls_num, self.n_way, False)  # no duplicate
             np.random.shuffle(selected_cls)
-
             support_x = []
             query_x = []
-                
-            # 2. select k_shot + k_query for the selected graph
-            #print(self.data_graph[selected_graph])
-            #print(len(self.data_graph[selected_graph]))
-            #print(len(self.data_graph))
-            data = self.data_label[selected_graph]
-
             for cls in selected_cls:
                 
                 # 2. select k_shot + k_query for each class
-                try:
-                    selected_subgraphs_idx = np.random.choice(len(data[cls]), self.k_shot + self.k_query, False)
-                except:
-                    print(len(data[cls]))
-                    print(data[cls])
+                selected_subgraphs_idx = np.random.choice(len(self.data[cls]), self.k_shot + self.k_query, False)
+
                 np.random.shuffle(selected_subgraphs_idx)
                 indexDtrain = np.array(selected_subgraphs_idx[:self.k_shot])  # idx for Dtrain
                 indexDtest = np.array(selected_subgraphs_idx[self.k_shot:])  # idx for Dtest
                 support_x.append(
-                    np.array(data[cls])[indexDtrain].tolist())  # get all subgraphs filename for current Dtrain
-                query_x.append(np.array(data[cls])[indexDtest].tolist())
-
-
-           #selected_subgraphs_idx = np.random.choice(len(data), self.k_shot + self.k_query, False)
-
-            #np.random.shuffle(selected_subgraphs_idx)
-            #indexDtrain = np.array(selected_subgraphs_idx[:self.k_shot])  # idx for Dtrain
-            #indexDtest = np.array(selected_subgraphs_idx[self.k_shot:])  # idx for Dtest
-            #support_x.append(
-            #    np.array(self.data_graph[selected_graph])[indexDtrain].tolist())  # get all subgraphs filename for current Dtrain
-            #query_x.append(np.array(self.data_graph[selected_graph])[indexDtest].tolist())
+                    np.array(self.data[cls])[indexDtrain].tolist())  # get all subgraphs filename for current Dtrain
+                query_x.append(np.array(self.data[cls])[indexDtest].tolist())
 
             # shuffle the correponding relation between support set and query set
             random.shuffle(support_x)
             random.shuffle(query_x)
 
-            # support_x: [setsz (k_shot+k_query * 1)] numbers of subgraphs   
+            # support_x: [setsz (k_shot+k_query * n_way)] numbers of subgraphs   
             self.support_x_batch.append(support_x)  # append set to current sets
             self.query_x_batch.append(query_x)  # append sets to current sets
 
@@ -173,6 +128,9 @@ class Subgraphs(Dataset):
                               for sublist in self.support_x_batch[index] for item in sublist]).astype(np.int32)
         support_center = np.array([self.subgraph2center_node[item] 
                              for sublist in self.support_x_batch[index] for item in sublist]).astype(np.int32)
+        
+        support_node_idx = [self.subgraph2nodeidx[item] 
+                             for sublist in self.support_x_batch[index] for item in sublist]
 
         query_x = [self.subgraph_list[item]  # obtain a list of DGL subgraphs
                            for sublist in self.query_x_batch[index] for item in sublist]
@@ -180,22 +138,21 @@ class Subgraphs(Dataset):
                             for sublist in self.query_x_batch[index] for item in sublist]).astype(np.int32)
         query_center = np.array([self.subgraph2center_node[item]
                             for sublist in self.query_x_batch[index] for item in sublist]).astype(np.int32)
-               
+        query_node_idx = [self.subgraph2nodeidx[item] 
+                            for sublist in self.query_x_batch[index] for item in sublist]
+        
         # print('global:', support_y, query_y)
         # support_y: [setsz]
         # query_y: [querysz]
         # unique: [n-way], sorted
-        
-        # we don't want unique values for 
-
-        #unique = np.unique(support_y)
-        #random.shuffle(unique)
+        unique = np.unique(support_y)
+        random.shuffle(unique)
         # relative means the label ranges from 0 to n-way
-        #support_y_relative = np.zeros(self.setsz)
-        #query_y_relative = np.zeros(self.querysz)
-        #for idx, l in enumerate(unique):
-        #    support_y_relative[support_y == l] = idx
-         #   query_y_relative[query_y == l] = idx
+        support_y_relative = np.zeros(self.setsz)
+        query_y_relative = np.zeros(self.querysz)
+        for idx, l in enumerate(unique):
+            support_y_relative[support_y == l] = idx
+            query_y_relative[query_y == l] = idx
 
         # print('relative:', support_y_relative, query_y_relative)
         '''
@@ -212,7 +169,7 @@ class Subgraphs(Dataset):
         batched_graph_spt = dgl.batch(support_x)
         batched_graph_qry = dgl.batch(query_x)
 
-        return batched_graph_spt, torch.LongTensor(support_y), batched_graph_qry, torch.LongTensor(query_y), torch.LongTensor(support_center), torch.LongTensor(query_center)
+        return batched_graph_spt, torch.LongTensor(support_y_relative), batched_graph_qry, torch.LongTensor(query_y_relative), torch.LongTensor(support_center), torch.LongTensor(query_center), support_node_idx, query_node_idx
 
     def __len__(self):
         # as we have built up to batchsz of sets, you can sample some small batch size of sets.
@@ -221,9 +178,9 @@ class Subgraphs(Dataset):
 def collate(samples):
     # The input `samples` is a list of pairs
     #  (graph, label).
-        graphs_spt, labels_spt, graph_qry, labels_qry, center_spt, center_qry = map(list, zip(*samples))
+        graphs_spt, labels_spt, graph_qry, labels_qry, center_spt, center_qry, nodeidx_spt, nodeidx_qry = map(list, zip(*samples))
 
-        return graphs_spt, labels_spt, graph_qry, labels_qry, center_spt, center_qry
+        return graphs_spt, labels_spt, graph_qry, labels_qry, center_spt, center_qry, nodeidx_spt, nodeidx_qry 
 
 
 if __name__ == '__main__':

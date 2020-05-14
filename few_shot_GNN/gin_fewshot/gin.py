@@ -223,11 +223,11 @@ def main(args):
     test_shot = args.test_shot
     iteration = 100
 
-    G = nx.from_numpy_matrix(np.load(args.data_dir + 'graph_adj.npy'))
+    G = nx.from_numpy_matrix(np.load(args.data_dir + 'adj.npy'))
     adj = nx.adjacency_matrix(G)
     #adj = aug_normalized_adjacency(A)
 
-    features = np.eye(adj.shape[0])
+    features = np.load(args.data_dir + 'features.npy')
     labels = pd.read_csv(args.data_dir + 'data.csv')
     labels = labels.label.values
      
