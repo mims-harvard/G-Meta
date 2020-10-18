@@ -28,26 +28,26 @@ It also supports various parameters input:
 
 ```bash
 python train.py --data_dir # str: data path
-            --task_setup # 'Disjoint' or 'Shared': task setup, disjoint label or shared label
-            --link_pred_mode # 'True' or 'False': link prediction or node classification
-            --batchsz # int: number of tasks in total
-            --epoch # int: epoch size
-            --h # 1 or 2 or 3: use h-hops neighbor as the subgraph.
-            --hidden_dim # int: hidden dim size of GNN
-            --input_dim # int: input dim size of GNN
-            --k_qry # int: number of query shots for each task
-            --k_spt # int: number of support shots for each task
-            --n_way # int: number of ways (size of the label set)
-            --meta_lr # float: outer loop learning rate
-            --update_lr # float: inner loop learning rate
-            --update_step # int: inner loop update steps during training
-            --update_step_test # int: inner loop update steps during finetuning
-            --task_num # int: number of tasks for each meta-set
-            --sample_nodes # int: when subgraph size is above this threshold, it samples this number of nodes from the subgraph
-            --task_mode # 'True' or 'False': this is specifically for Tissue-PPI, where there are 10 tasks to evaluate.
-            --num_worker # int: number of workers to process the dataloader. default 0.
-            --train_result_report_steps # int: number to print the training accuracy.
-            --val_result_report_steps # int: number of steps to report the validation accuracy, recommend to the batchsz/n.
+                --task_setup # 'Disjoint' or 'Shared': task setup, disjoint label or shared label
+                --link_pred_mode # 'True' or 'False': link prediction or node classification
+                --batchsz # int: number of tasks in total
+                --epoch # int: epoch size
+                --h # 1 or 2 or 3: use h-hops neighbor as the subgraph.
+                --hidden_dim # int: hidden dim size of GNN
+                --input_dim # int: input dim size of GNN
+                --k_qry # int: number of query shots for each task
+                --k_spt # int: number of support shots for each task
+                --n_way # int: number of ways (size of the label set)
+                --meta_lr # float: outer loop learning rate
+                --update_lr # float: inner loop learning rate
+                --update_step # int: inner loop update steps during training
+                --update_step_test # int: inner loop update steps during finetuning
+                --task_num # int: number of tasks for each meta-set
+                --sample_nodes # int: when subgraph size is above this threshold, it samples this number of nodes from the subgraph
+                --task_mode # 'True' or 'False': this is specifically for Tissue-PPI, where there are 10 tasks to evaluate.
+                --num_worker # int: number of workers to process the dataloader. default 0.
+                --train_result_report_steps # int: number to print the training accuracy.
+                --val_result_report_steps # int: number of steps to report the validation accuracy, recommend to the batchsz/n.
 ```
 
 To reproduce results, using the following code as example after you download the dataset from the section below.
@@ -100,7 +100,7 @@ python
 
 ## Data Processing
 
-We provide the processed data files in the google drive link [here]().
+We provide the processed data files for the five real-world datasets used in the paper in this google drive link [here]().
 
 To create your own dataset, you should create the following files and put it under the name below:
 
@@ -117,11 +117,11 @@ For link prediction, note that the support set should contain only edges in the 
 - `train.csv`, `val.csv`, and `test.csv`: Merge the above two csv files.
 - `label.pkl`: A dictionary of labels where {'A_B_C': D} means the node B and node C in graph A has link status D. D can be 0 or 1 means no link or has link.
 
-We also provide a sample data processing script in the data_process folder. See `node_process.py` and `link_process.py`.
+We also provide a sample data processing script in the `data_process` folder. See `node_process.py` and `link_process.py`.
 
 ## Cite us
 ```
-@article{gmeta,
+@article{g-meta,
   title={Graph Meta Learning via Local Subgraphs},
   author={Huang, Kexin and Zitnik, Marinka},
   journal={NeurIPS},
