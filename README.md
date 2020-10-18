@@ -20,7 +20,7 @@ python train.py --data_dir DATA_PATH --task_setup Disjoint
 python train.py --data_dir DATA_PATH --task_setup Shared
 # Multiple graph disjoint label, node classification (e.g. Fold-PPI)
 python train.py --data_dir DATA_PATH --task_setup Disjoint
-# Multiple graph shared label, link prediction (e.g. FirstMM-DB)
+# Multiple graph shared label, link prediction (e.g. FirstMM-DB, Tree-of-Life)
 python train.py --data_dir DATA_PATH --task_setup Shared --link_pred_mode True
 ```
 
@@ -28,26 +28,26 @@ It also supports various parameters input:
 
 ```bash
 python train.py --data_dir # str: data path
-				--task_setup # 'Disjoint' or 'Shared': task setup, disjoint label or shared label
-				--link_pred_mode # 'True' or 'False': link prediction or node classification
-				--batchsz # int: number of tasks in total
-				--epoch # int: epoch size
-				--h # 1 or 2 or 3: use h-hops neighbor as the subgraph.
-				--hidden_dim # int: hidden dim size of GNN
-				--input_dim # int: input dim size of GNN
-				--k_qry # int: number of query shots for each task
-				--k_spt # int: number of support shots for each task
-				--n_way # int: number of ways (size of the label set)
-				--meta_lr # float: outer loop learning rate
-				--update_lr # float: inner loop learning rate
-				--update_step # int: inner loop update steps during training
-				--update_step_test # int: inner loop update steps during finetuning
-				--task_num # int: number of tasks for each meta-set
-				--sample_nodes # int: when subgraph size is above this threshold, it samples this number of nodes from the subgraph
-				--task_mode # 'True' or 'False': this is specifically for Tissue-PPI, where there are 10 tasks to evaluate.
-				--num_worker # int: number of workers to process the dataloader. default 0.
-				--train_result_report_steps # int: number to print the training accuracy.
-				--val_result_report_steps # int: number of steps to report the validation accuracy, recommend to the batchsz/n.
+            --task_setup # 'Disjoint' or 'Shared': task setup, disjoint label or shared label
+            --link_pred_mode # 'True' or 'False': link prediction or node classification
+            --batchsz # int: number of tasks in total
+            --epoch # int: epoch size
+            --h # 1 or 2 or 3: use h-hops neighbor as the subgraph.
+            --hidden_dim # int: hidden dim size of GNN
+            --input_dim # int: input dim size of GNN
+            --k_qry # int: number of query shots for each task
+            --k_spt # int: number of support shots for each task
+            --n_way # int: number of ways (size of the label set)
+            --meta_lr # float: outer loop learning rate
+            --update_lr # float: inner loop learning rate
+            --update_step # int: inner loop update steps during training
+            --update_step_test # int: inner loop update steps during finetuning
+            --task_num # int: number of tasks for each meta-set
+            --sample_nodes # int: when subgraph size is above this threshold, it samples this number of nodes from the subgraph
+            --task_mode # 'True' or 'False': this is specifically for Tissue-PPI, where there are 10 tasks to evaluate.
+            --num_worker # int: number of workers to process the dataloader. default 0.
+            --train_result_report_steps # int: number to print the training accuracy.
+            --val_result_report_steps # int: number of steps to report the validation accuracy, recommend to the batchsz/n.
 ```
 
 To reproduce results, using the following code as example after you download the dataset from the section below.
