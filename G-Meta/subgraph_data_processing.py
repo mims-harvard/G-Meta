@@ -9,43 +9,22 @@ import pickle
 from torch.utils.data import DataLoader
 import dgl
 import networkx as nx
-
+import itertools
 
 class Subgraphs(Dataset):
-    """
-    put nodes files as :
-    root :
-        |- 
-        |- train.csv
-        |- test.csv
-        |- val.csv
-    NOTICE: meta-learning is different from general supervised learning, especially the concept of batch and set.
-    batch: contains several sets
-    sets: conains n_way * k_shot for meta-train set, n_way * n_query for meta-test set.
-    """
-
-    def __init__(self, root, mode, subgraph2label, n_way, k_shot, k_query, batchsz, args, adjs):
-        """
-
-        :param root: root path of mini-subgraphnet
-        :param mode: train, val or test
-        :param batchsz: batch size of sets, not batch of subgraphs
-        :param n_way:
-        :param k_shot:
-        :param k_query: num of qeruy subgraphs per class
-        """
-
+    def __init__(self, root, mode, subgraph2label, n_way, k_shot, k_query, batchsz, args, adjs, h):
         self.batchsz = batchsz  # batch of set, not batch of subgraphs
         self.n_way = n_way  # n-way
-        self.k_shot = k_shot  # k-shot
-        self.k_query = k_query  # for evaluation
-        self.setsz = self.n_way * self.k_shot  # num of samples per set
+        self.k_shot = k_shot  # k-shot support set
+        self.k_query = k_query  # for query set
+        self.setsz = self.n_way * self.k_shot  # num of samples per support set
         self.querysz = self.n_way * self.k_query  # number of samples per set for evaluation
-        print('shuffle DB :%s, b:%d, %d-way, %d-shot, %d-query' % (
-        mode, batchsz, n_way, k_shot, k_query))
-
+        self.h = h # number of h hops
+        self.sample_nodes = args.sample_nodes
+        print('shuffle DB :%s, b:%d, %d-way, %d-shot, %d-query, %d-hops' % (
+        mode, batchsz, n_way, k_shot, k_query, h))
+    
         # load subgraph list if preprocessed
-
         self.subgraph2label = subgraph2label
         
         if args.link_pred_mode == 'True':
@@ -69,13 +48,11 @@ class Subgraphs(Dataset):
         
         self.subgraphs = {}
        
-        
         if self.task_setup == 'Disjoint':
             self.data = []
 
             for i, (k, v) in enumerate(dictLabels.items()):
                 self.data.append(v)  # [[subgraph1, subgraph2, ...], [subgraph111, ...]]
-                #self.subgraph2label[k] = i + self.startidx  # {"subgraph_name[:9]":label}
             self.cls_num = len(self.data)
 
             self.create_batch_disjoint(self.batchsz)
@@ -94,7 +71,6 @@ class Subgraphs(Dataset):
                 relative_idx_map_spt = dict(zip(list(dictGraphs_spt.keys()), range(len(list(dictGraphs_spt.keys())))))
 
                 for i, (k, v) in enumerate(dictGraphsLabels_spt.items()):
-                    #self.data_label[k] = []
                     for m, n in v.items():
                         self.data_label_spt[relative_idx_map_spt[k]].append(n)
                         
@@ -134,7 +110,6 @@ class Subgraphs(Dataset):
                     for m, n in v.items():
 
                         self.data_label[relative_idx_map[k]].append(n)  # [(graph 1)[(label1)[subgraph1, subgraph2, ...], (label2)[subgraph111, ...]], graph2: [[subgraph1, subgraph2, ...], [subgraph111, ...]] ]
-                    #self.subgraph2label[k] = i + self.startidx  # {"subgraph_name[:9]":label}
                 self.cls_num = len(self.data_label[0])
                 self.graph_num = len(self.data_graph)
 
@@ -142,11 +117,6 @@ class Subgraphs(Dataset):
 
 
     def loadCSV(self, csvf):
-        """
-        return a dict saving the information of csv
-        :param splitFile: csv file name
-        :return: {label:[file1, file2 ...]}
-        """
         dictGraphsLabels = {}
         dictLabels = {}
         dictGraphs = {}
@@ -179,9 +149,7 @@ class Subgraphs(Dataset):
 
     def create_batch_disjoint(self, batchsz):
         """
-        create batch for meta-learning.
-        episode here means batch, and it means how many sets we want to retain.
-        :return:
+        create the entire set of batches of tasks for disjoint label setting, indepedent of # of graphs.
         """
         self.support_x_batch = []  # support set batch
         self.query_x_batch = []  # query set batch
@@ -215,9 +183,7 @@ class Subgraphs(Dataset):
 
     def create_batch_shared(self, batchsz):
         """
-        create batch for meta-learning.
-        episode here means batch, and it means how many sets we want to retain.
-        :return:
+        create the entire set of batches of tasks for shared label setting, indepedent of # of graphs.
         """
         k_shot = self.k_shot
         k_query = self.k_query
@@ -237,11 +203,6 @@ class Subgraphs(Dataset):
 
             support_x = []
             query_x = []
-                
-            # 2. select k_shot + k_query for the selected graph
-            #print(self.data_graph[selected_graph])
-            #print(len(self.data_graph[selected_graph]))
-            #print(len(self.data_graph))
 
             for cls in selected_cls:
                 
@@ -255,7 +216,7 @@ class Subgraphs(Dataset):
                         np.array(data[cls])[indexDtrain].tolist())  # get all subgraphs filename for current Dtrain
                     query_x.append(np.array(data[cls])[indexDtest].tolist())
                 except:
-
+                    # this was not used in practice 
                     if len(data[cls]) >= k_shot:
                         selected_subgraphs_idx = np.array(range(len(data[cls])))
                         np.random.shuffle(selected_subgraphs_idx)
@@ -287,9 +248,7 @@ class Subgraphs(Dataset):
 
     def create_batch_LinkPred(self, batchsz):
         """
-        create batch for meta-learning.
-        episode here means batch, and it means how many sets we want to retain.
-        :return:
+        create the entire set of batches of tasks for shared label linked prediction setting, indepedent of # of graphs.
         """
         k_shot = self.k_shot
         k_query = self.k_query
@@ -332,14 +291,28 @@ class Subgraphs(Dataset):
             self.support_x_batch.append(support_x)  # append set to current sets
             self.query_x_batch.append(query_x)  # append sets to current sets
         
-    
+    # helper to generate subgraphs on the fly.
     def generate_subgraph(self, G, i, item):
         if item in self.subgraphs:
             return self.subgraphs[item]
         else:
-            f_hop = [n.item() for n in G.in_edges(i)[0]]
-            n_l = [[n.item() for n in G.in_edges(i)[0]] for i in f_hop]
-            h_hops_neighbor = torch.tensor(list(set([item for sublist in n_l for item in sublist] + f_hop + [i]))).numpy()
+            # instead of calculating shortest distance, we find the following ways to get subgraphs are quicker
+            if self.h == 2:
+                f_hop = [n.item() for n in G.in_edges(i)[0]]
+                n_l = [[n.item() for n in G.in_edges(i)[0]] for i in f_hop]
+                h_hops_neighbor = torch.tensor(list(set(list(itertools.chain(*n_l)) + f_hop + [i]))).numpy()
+            elif self.h == 1:
+                f_hop = [n.item() for n in G.in_edges(i)[0]]
+                h_hops_neighbor = torch.tensor(list(set(f_hop + [i]))).numpy()
+            elif self.h == 3:
+                f_hop = [n.item() for n in G.in_edges(i)[0]]
+                n_2 = [[n.item() for n in G.in_edges(i)[0]] for i in f_hop]
+                n_3 = [[n.item() for n in G.in_edges(i)[0]] for i in list(itertools.chain(*n_2))]
+                h_hops_neighbor = torch.tensor(list(set(list(itertools.chain(*n_2)) + list(itertools.chain(*n_3)) + f_hop + [i]))).numpy()
+            if h_hops_neighbor.reshape(-1,).shape[0] > self.sample_nodes:
+                h_hops_neighbor = np.random.choice(h_hops_neighbor, self.sample_nodes, replace = False)
+                h_hops_neighbor = np.unique(np.append(h_hops_neighbor, [i]))
+            
             sub = G.subgraph(h_hops_neighbor)         
             h_c = list(sub.parent_nid.numpy())
             dict_ = dict(zip(h_c, list(range(len(h_c)))))
@@ -361,8 +334,8 @@ class Subgraphs(Dataset):
             
             h_hops_neighbor = np.union1d(h_hops_neighbor1, h_hops_neighbor2)
             
-            if h_hops_neighbor.reshape(-1,).shape[0] > 1000:
-                h_hops_neighbor = np.random.choice(h_hops_neighbor, 1000, replace = False)
+            if h_hops_neighbor.reshape(-1,).shape[0] > self.sample_nodes:
+                h_hops_neighbor = np.random.choice(h_hops_neighbor, self.sample_nodes, replace = False)
                 h_hops_neighbor = np.unique(np.append(h_hops_neighbor, [i, j]))
                 
             sub = G.subgraph(h_hops_neighbor)         
@@ -412,11 +385,6 @@ class Subgraphs(Dataset):
         
         query_center = np.array([j for i, j, k in info]).astype(np.int32)
         query_node_idx = [k for i, j, k in info]
-
-        # print('global:', support_y, query_y)
-        # support_y: [setsz]
-        # query_y: [querysz]
-        # unique: [n-way], sorted
 
         if self.task_setup == 'Disjoint':
             unique = np.unique(support_y)

@@ -12,9 +12,6 @@ from    copy import deepcopy
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def euclidean_dist(x, y):
-    '''
-    Compute euclidean distance between two tensors
-    '''
     # x: N x D
     # y: M x D
     n = x.size(0)
@@ -43,13 +40,8 @@ def proto_loss_spt(logits, y_t, n_support):
 
     prototypes = torch.stack([input_cpu[idx_list].mean(0) for idx_list in support_idxs])
     query_idxs = torch.stack(list(map(lambda c: target_cpu.eq(c).nonzero()[:n_support], classes))).view(-1)
-    #print(query_idxs)
-    query_samples = input_cpu[query_idxs]
-    #print(query_samples)
-        
+    query_samples = input_cpu[query_idxs]   
     dists = euclidean_dist(query_samples, prototypes)
-    #print(dists)
-    #print(F.log_softmax(-dists, dim=1).shape)
     log_p_y = F.log_softmax(-dists, dim=1).view(n_classes, n_query, -1)
 
     target_inds = torch.arange(0, n_classes)
@@ -71,7 +63,6 @@ def proto_loss_qry(logits, y_t, prototypes):
     n_query = int(logits.shape[0]/n_classes)
 
     query_idxs = torch.stack(list(map(lambda c: target_cpu.eq(c).nonzero(), classes))).view(-1)
-    #print(query_idxs)
     query_samples = input_cpu[query_idxs]
 
     dists = euclidean_dist(query_samples, prototypes)
@@ -89,16 +80,8 @@ def proto_loss_qry(logits, y_t, prototypes):
 
 
 class Meta(nn.Module):
-    """
-    Meta Learner
-    """
     def __init__(self, args, config):
-        """
-
-        :param args:
-        """
         super(Meta, self).__init__()
-
         self.update_lr = args.update_lr
         self.meta_lr = args.meta_lr
         self.n_way = args.n_way
@@ -115,33 +98,7 @@ class Meta(nn.Module):
 
         self.method = args.method
 
-        if self.method == 'ProtoNet':
-            self.optim = optim.Adam(self.net.parameters(), lr = self.update_lr)
-    
-    def clip_grad_by_norm_(self, grad, max_norm):
-        """
-        in-place gradient clipping.
-        :param grad: list of gradients
-        :param max_norm: maximum norm allowable
-        :return:
-        """
-
-        total_norm = 0
-        counter = 0
-        for g in grad:
-            param_norm = g.data.norm(2)
-            total_norm += param_norm.item() ** 2
-            counter += 1
-        total_norm = total_norm ** (1. / 2)
-
-        clip_coef = max_norm / (total_norm + 1e-6)
-        if clip_coef < 1:
-            for g in grad:
-                g.data.mul_(clip_coef)
-
-        return total_norm/counter
-    
-    def forward_ProtoMAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat, graphlets):
+    def forward_ProtoMAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat):
         """
         b: number of tasks
         setsz: the size for each task
@@ -162,54 +119,41 @@ class Meta(nn.Module):
             feat_spt = torch.Tensor(np.vstack(([feat[g_spt[i][j]][np.array(x)] for j, x in enumerate(n_spt[i])]))).to(device)
             feat_qry = torch.Tensor(np.vstack(([feat[g_qry[i][j]][np.array(x)] for j, x in enumerate(n_qry[i])]))).to(device)
             # 1. run the i-th task and compute loss for k=0
-            logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt, vars=None)
+            logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), feat_spt, vars=None)
             loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
             losses_s[0] += loss
-            #loss = F.cross_entropy(logits, y_spt[i].to(device))
             grad = torch.autograd.grad(loss, self.net.parameters())
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, self.net.parameters())))
 
             # this is the loss and accuracy before first update
             with torch.no_grad():
                 # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, self.net.parameters())
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), feat_qry, self.net.parameters())
                 loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
                 losses_q[0] += loss_q
-
-                #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
                 corrects[0] = corrects[0] + acc_q
 
             # this is the loss and accuracy after the first update
             with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, fast_weights)
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), feat_qry, fast_weights)
                 loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
                 losses_q[1] += loss_q
-                # [setsz]
-                #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
                 corrects[1] = corrects[1] + acc_q
 
             for k in range(1, self.update_step):
                 # 1. run the i-th task and compute loss for k=1~K-1
-                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt, fast_weights)
+                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), feat_spt, fast_weights)
                 loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
                 losses_s[k] += loss
                 # 2. compute grad on theta_pi
                 grad = torch.autograd.grad(loss, fast_weights, retain_graph=True)
                 # 3. theta_pi = theta_pi - train_lr * grad
                 fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
-
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, fast_weights)
+                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), feat_qry, fast_weights)
                 # loss_q will be overwritten and just keep the loss_q on last update step.
                 loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
                 losses_q[k + 1] += loss_q
 
-                #with torch.no_grad():
-                #    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #    correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()  # convert to numpy
                 corrects[k + 1] = corrects[k + 1] + acc_q
 
         # end of all tasks
@@ -218,40 +162,22 @@ class Meta(nn.Module):
         
         if torch.isnan(loss_q):
             print('loss becomes null in this step')
-            #print(losses_q)
-            #print(task_num)
-            #print(grad)
         else:    
             # optimize theta parameters
             self.meta_optim.zero_grad()
             loss_q.backward()
-            # print('meta update')
-            # for p in self.net.parameters()[:5]:
-            #   print(torch.norm(p).item())
             self.meta_optim.step()
 
-            #print(querysz *task_num)
         accs = np.array(corrects) / (task_num)
-        #print([i.detach().numpy() for i in losses_q])
-        #print([i.detach().numpy() for i in losses_s])
+
         return accs
 
     def finetunning_ProtoMAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
-        """
-
-        :param x_spt:   [setsz, c_, h, w]
-        :param y_spt:   [setsz]
-        :param x_qry:   [querysz, c_, h, w]
-        :param y_qry:   [querysz]
-        :return:
-        """
-
         querysz = len(y_qry[0])
 
         corrects = [0 for _ in range(self.update_step_test + 1)]
 
-        # in order to not ruin the state of running_mean/variance and bn_weight/bias
-        # we finetunning on the copied model instead of self.net
+        # finetunning on the copied model instead of self.net
         net = deepcopy(self.net)
         x_spt = x_spt[0]
         y_spt = y_spt[0]
@@ -279,24 +205,12 @@ class Meta(nn.Module):
             # [setsz, nway]
             logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, net.parameters())
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-            #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-            #losses_q[0] += loss_q
-
-            #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
             corrects[0] = corrects[0] + acc_q
-
-
         # this is the loss and accuracy after the first update
         with torch.no_grad():
             # [setsz, nway]
             logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-            #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-            #losses_q[1] += loss_q
-
-            #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
             corrects[1] = corrects[1] + acc_q
 
 
@@ -312,389 +226,19 @@ class Meta(nn.Module):
             logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
             # loss_q will be overwritten and just keep the loss_q on last update step.
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-
-            #with torch.no_grad():
-            #    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #    correct = torch.eq(pred_q, y_qry.to(device)).sum().item()  # convert to numpy
-            #    corrects[k + 1] = corrects[k + 1] + correct
             corrects[k + 1] = corrects[k + 1] + acc_q
 
         del net
-
         accs = np.array(corrects) 
 
         return accs
 
-    def forward_MAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
-        """
-        b: number of tasks
-        setsz: the size for each task
-
-        :param x_spt:   [b], where each unit is a mini-batch of subgraphs, i.e. x_spt[0] is a DGL batch of # setsz subgraphs
-        :param y_spt:   [b, setsz]
-        :param x_qry:   [b], where each unit is a mini-batch of subgraphs, i.e. x_spt[0] is a DGL batch of # setsz subgraphs
-        :param y_qry:   [b, querysz]
-        :return:
-        """
-        task_num = len(x_spt)
-        querysz = len(y_qry[0])
-
-        losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
-        corrects = [0 for _ in range(self.update_step + 1)]
-
-        for i in range(task_num):
-            feat_spt = torch.Tensor(np.vstack(([feat[g_spt[i][j]][np.array(x)] for j, x in enumerate(n_spt[i])]))).to(device)
-            feat_qry = torch.Tensor(np.vstack(([feat[g_qry[i][j]][np.array(x)] for j, x in enumerate(n_qry[i])]))).to(device)
-            
-            logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt, vars=None)
-            #loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
-            loss = F.cross_entropy(logits, y_spt[i].to(device))
-            grad = torch.autograd.grad(loss, self.net.parameters())
-            fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, self.net.parameters())))
-
-            # this is the loss and accuracy before first update
-            with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, self.net.parameters())
-                #loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-                losses_q[0] += loss_q
-
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-                corrects[0] = corrects[0] + correct
-
-            # this is the loss and accuracy after the first update
-            with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, fast_weights)
-                loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-                #loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                losses_q[1] += loss_q
-                # [setsz]
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-                corrects[1] = corrects[1] + correct
-
-            for k in range(1, self.update_step):
-                # 1. run the i-th task and compute loss for k=1~K-1
-                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt, fast_weights)
-                #loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
-                loss = F.cross_entropy(logits, y_spt[i].to(device))
-                # 2. compute grad on theta_pi
-                grad = torch.autograd.grad(loss, fast_weights, retain_graph=True)
-                # 3. theta_pi = theta_pi - train_lr * grad
-                fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
-
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry, fast_weights)
-                # loss_q will be overwritten and just keep the loss_q on last update step.
-                #loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-                losses_q[k + 1] += loss_q
-
-                with torch.no_grad():
-                    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                    correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()  # convert to numpy
-                    corrects[k + 1] = corrects[k + 1] + correct
-
-        # end of all tasks
-        # sum over all losses on query set across all tasks
-        loss_q = losses_q[-1] / task_num
-
-        # optimize theta parameters
-        self.meta_optim.zero_grad()
-        loss_q.backward()
-        # print('meta update')
-        # for p in self.net.parameters()[:5]:
-        #   print(torch.norm(p).item())
-        self.meta_optim.step()
-
-        #print(querysz *task_num)
-        accs = np.array(corrects) / (querysz * task_num)
-
+    def forward(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat):
+        if self.method == 'G-Meta':
+            accs = self.forward_ProtoMAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
         return accs
 
-
-    def finetunning_MAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
-        """
-
-        :param x_spt:   [setsz, c_, h, w]
-        :param y_spt:   [setsz]
-        :param x_qry:   [querysz, c_, h, w]
-        :param y_qry:   [querysz]
-        :return:
-        """
-
-        querysz = len(y_qry[0])
-
-        corrects = [0 for _ in range(self.update_step_test + 1)]
-
-        # in order to not ruin the state of running_mean/variance and bn_weight/bias
-        # we finetunning on the copied model instead of self.net
-        net = deepcopy(self.net)
-        x_spt = x_spt[0]
-        y_spt = y_spt[0]
-        x_qry = x_qry[0]
-        y_qry = y_qry[0]
-        c_spt = c_spt[0]
-        c_qry = c_qry[0]
-        n_spt = n_spt[0]
-        n_qry = n_qry[0]
-        g_spt = g_spt[0]
-        g_qry = g_qry[0]
-
-        
-        feat_spt = torch.Tensor(np.vstack(([feat[g_spt[j]][np.array(x)] for j, x in enumerate(n_spt)]))).to(device)
-        feat_qry = torch.Tensor(np.vstack(([feat[g_qry[j]][np.array(x)] for j, x in enumerate(n_qry)]))).to(device)
-            
-        # 1. run the i-th task and compute loss for k=0
-        logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt)
-        #loss, _, prototypes = proto_loss_spt(logits, y_spt, self.k_spt)
-        loss = F.cross_entropy(logits, y_spt.to(device))
-        grad = torch.autograd.grad(loss, net.parameters())
-        fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, net.parameters())))
-
-        # this is the loss and accuracy before first update
-        with torch.no_grad():
-            # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, net.parameters())
-            #loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-            pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            correct = torch.eq(pred_q, y_qry.to(device)).sum().item()
-            corrects[0] = corrects[0] + correct
-
-
-        # this is the loss and accuracy after the first update
-        with torch.no_grad():
-            # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
-            #loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-
-            pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            correct = torch.eq(pred_q, y_qry.to(device)).sum().item()
-            corrects[1] = corrects[1] + correct
-
-
-        for k in range(1, self.update_step_test):
-            # 1. run the i-th task and compute loss for k=1~K-1
-            logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt, fast_weights)
-            loss = F.cross_entropy(logits, y_spt.to(device))
-            # 2. compute grad on theta_pi
-            grad = torch.autograd.grad(loss, fast_weights, retain_graph=True)
-            # 3. theta_pi = theta_pi - train_lr * grad
-            fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
-
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
-            # loss_q will be overwritten and just keep the loss_q on last update step.
-            loss_q = F.cross_entropy(logits_q, y_qry.to(device))
-
-            with torch.no_grad():
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry.to(device)).sum().item()  # convert to numpy
-                corrects[k + 1] = corrects[k + 1] + correct
-            #corrects[k + 1] = corrects[k + 1] + correct
-
-        del net
-
-        accs = np.array(corrects)/querysz
-
-        return accs
-
-    def forward_ProtoNet(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
-        """
-        b: number of tasks
-        setsz: the size for each task
-
-        :param x_spt:   [b], where each unit is a mini-batch of subgraphs, i.e. x_spt[0] is a DGL batch of # setsz subgraphs
-        :param y_spt:   [b, setsz]
-        :param x_qry:   [b], where each unit is a mini-batch of subgraphs, i.e. x_spt[0] is a DGL batch of # setsz subgraphs
-        :param y_qry:   [b, querysz]
-        :return:
-        """
-        task_num = len(x_spt)
-        querysz = len(y_qry[0])
-        losses_s = [0 for _ in range(self.update_step)]
-        losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
-        corrects = [0 for _ in range(self.update_step + 1)]
-
-        for i in range(task_num):
-            feat_spt = torch.Tensor(np.vstack(([feat[g_spt[i][j]][np.array(x)] for j, x in enumerate(n_spt[i])]))).to(device)
-            feat_qry = torch.Tensor(np.vstack(([feat[g_qry[i][j]][np.array(x)] for j, x in enumerate(n_qry[i])]))).to(device)
-            
-            logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt)
-            loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
-            self.optim.zero_grad()
-            loss.backward()
-            self.optim.step()
-
-            # this is the loss and accuracy before first update
-            with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry)
-                loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-                losses_q[0] += loss_q
-
-                #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-                corrects[0] = corrects[0] + acc_q
-
-            # this is the loss and accuracy after the first update
-            with torch.no_grad():
-                # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry)
-                loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                losses_q[1] += loss_q
-                # [setsz]
-                #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-                corrects[1] = corrects[1] + acc_q
-
-            for k in range(1, self.update_step):
-                # 1. run the i-th task and compute loss for k=1~K-1
-                logits, _ = self.net(x_spt[i].to(device), c_spt[i].to(device), graphlets, feat_spt)
-                loss, _, prototypes = proto_loss_spt(logits, y_spt[i], self.k_spt)
-                losses_s[k] += loss
-                self.optim.zero_grad()
-                if torch.isnan(loss):
-                    print(prototypes)
-                else:
-                    loss.backward()
-                    self.optim.step()
-
-                logits_q, _ = self.net(x_qry[i].to(device), c_qry[i].to(device), graphlets, feat_qry)
-                # loss_q will be overwritten and just keep the loss_q on last update step.
-                loss_q, acc_q = proto_loss_qry(logits_q, y_qry[i], prototypes)
-                losses_q[k + 1] += loss_q
-
-                #with torch.no_grad():
-                #    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                #    correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()  # convert to numpy
-                corrects[k + 1] = corrects[k + 1] + acc_q
-
-        # end of all tasks
-        # sum over all losses on query set across all tasks
-        loss_q = losses_q[-1] / task_num
-
-        # optimize theta parameters
-        #self.meta_optim.zero_grad()
-        #loss_q.backward()
-        # print('meta update')
-        # for p in self.net.parameters()[:5]:
-        #   print(torch.norm(p).item())
-        #self.meta_optim.step()
-
-        #print(querysz *task_num)
-        accs = np.array(corrects) / (task_num)
-        #print([i.detach().numpy() for i in losses_q])
-        #print([i.detach().numpy() for i in losses_s])
-        return accs
-
-
-    def finetunning_ProtoNet(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
-        """
-
-        :param x_spt:   [setsz, c_, h, w]
-        :param y_spt:   [setsz]
-        :param x_qry:   [querysz, c_, h, w]
-        :param y_qry:   [querysz]
-        :return:
-        """
-
-        querysz = len(y_qry[0])
-
-        corrects = [0 for _ in range(self.update_step_test + 1)]
-
-        # in order to not ruin the state of running_mean/variance and bn_weight/bias
-        # we finetunning on the copied model instead of self.net
-        net = deepcopy(self.net)
-        opt = optim.SGD(net.parameters(), self.update_lr)
-        x_spt = x_spt[0]
-        y_spt = y_spt[0]
-        x_qry = x_qry[0]
-        y_qry = y_qry[0]
-        c_spt = c_spt[0]
-        c_qry = c_qry[0]
-        n_spt = n_spt[0]
-        n_qry = n_qry[0]
-        g_spt = g_spt[0]
-        g_qry = g_qry[0]
-
-        
-        feat_spt = torch.Tensor(np.vstack(([feat[g_spt[j]][np.array(x)] for j, x in enumerate(n_spt)]))).to(device)
-        feat_qry = torch.Tensor(np.vstack(([feat[g_qry[j]][np.array(x)] for j, x in enumerate(n_qry)]))).to(device)
-            
-        # 1. run the i-th task and compute loss for k=0
-        logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt)
-        loss, _, prototypes = proto_loss_spt(logits, y_spt, self.k_spt)
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-
-        # this is the loss and accuracy before first update
-        with torch.no_grad():
-            # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry)
-            loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-            #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-            #losses_q[0] += loss_q
-
-            #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-            corrects[0] = corrects[0] + acc_q
-
-
-        # this is the loss and accuracy after the first update
-        with torch.no_grad():
-            # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry)
-            loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-            #loss_q = F.cross_entropy(logits_q, y_qry[i].to(device))
-            #losses_q[1] += loss_q
-
-            #pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #correct = torch.eq(pred_q, y_qry[i].to(device)).sum().item()
-            corrects[1] = corrects[1] + acc_q
-
-
-        for k in range(1, self.update_step_test):
-            # 1. run the i-th task and compute loss for k=1~K-1
-            logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt)
-            loss, _, prototypes = proto_loss_spt(logits, y_spt, self.k_spt)
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry)
-            # loss_q will be overwritten and just keep the loss_q on last update step.
-            loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
-
-            #with torch.no_grad():
-            #    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-            #    correct = torch.eq(pred_q, y_qry.to(device)).sum().item()  # convert to numpy
-            #    corrects[k + 1] = corrects[k + 1] + correct
-            corrects[k + 1] = corrects[k + 1] + acc_q
-
-        del net
-
-        accs = np.array(corrects) 
-
-        return accs
-
-    def forward(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat, graphlets):
-        if self.method == 'ProtoMAML':
-            accs = self.forward_ProtoMAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets)
-        elif self.method == 'MAML':
-            accs = self.forward_MAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat, graphlets)
-        elif self.method == 'ProtoNet':
-            accs = self.forward_ProtoNet(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat, graphlets)
-        return accs
-
-    def finetunning(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat, graphlets):
-        if self.method == 'ProtoMAML':
-            accs = self.finetunning_ProtoMAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets)
-        elif self.method == 'MAML':
-            accs = self.finetunning_MAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets)
-        elif self.method == 'ProtoNet':
-            accs = self.finetunning_ProtoNet(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets)
+    def finetunning(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry,feat):
+        if self.method == 'G-Meta':
+            accs = self.finetunning_ProtoMAML(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
         return accs
