@@ -1,0 +1,8 @@
+torch == 1.5.0
+dgl == 0.4.3post2
+numpy
+networkx
+scipy
+tqdm
+scikit-learn
+pandas

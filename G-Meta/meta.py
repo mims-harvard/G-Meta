@@ -172,7 +172,7 @@ class Meta(nn.Module):
 
         return accs
 
-    def finetunning_ProtoMAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat, graphlets):
+    def finetunning_ProtoMAML(self, x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat):
         querysz = len(y_qry[0])
 
         corrects = [0 for _ in range(self.update_step_test + 1)]
@@ -195,7 +195,7 @@ class Meta(nn.Module):
             
 
         # 1. run the i-th task and compute loss for k=0
-        logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt)
+        logits, _ = net(x_spt.to(device), c_spt.to(device), feat_spt)
         loss, _, prototypes = proto_loss_spt(logits, y_spt, self.k_spt)
         grad = torch.autograd.grad(loss, net.parameters())
         fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, net.parameters())))
@@ -203,27 +203,27 @@ class Meta(nn.Module):
         # this is the loss and accuracy before first update
         with torch.no_grad():
             # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, net.parameters())
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), feat_qry, net.parameters())
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
             corrects[0] = corrects[0] + acc_q
         # this is the loss and accuracy after the first update
         with torch.no_grad():
             # [setsz, nway]
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), feat_qry, fast_weights)
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
             corrects[1] = corrects[1] + acc_q
 
 
         for k in range(1, self.update_step_test):
             # 1. run the i-th task and compute loss for k=1~K-1
-            logits, _ = net(x_spt.to(device), c_spt.to(device), graphlets, feat_spt, fast_weights)
+            logits, _ = net(x_spt.to(device), c_spt.to(device), feat_spt, fast_weights)
             loss, _, prototypes = proto_loss_spt(logits, y_spt, self.k_spt)
             # 2. compute grad on theta_pi
             grad = torch.autograd.grad(loss, fast_weights, retain_graph=True)
             # 3. theta_pi = theta_pi - train_lr * grad
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
 
-            logits_q, _ = net(x_qry.to(device), c_qry.to(device), graphlets, feat_qry, fast_weights)
+            logits_q, _ = net(x_qry.to(device), c_qry.to(device), feat_qry, fast_weights)
             # loss_q will be overwritten and just keep the loss_q on last update step.
             loss_q, acc_q = proto_loss_qry(logits_q, y_qry, prototypes)
             corrects[k + 1] = corrects[k + 1] + acc_q

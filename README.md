@@ -1,16 +1,21 @@
-## [NeurIPS 2020] G-Meta: Graph Meta Learning via Local Subgraphs
-#### Kexin Huang, Marinka Zitnik
+# [NeurIPS 2020] G-Meta: Graph Meta Learning via Local Subgraphs
+#### [Kexin Huang](https://www.kexinhuang.com), [Marinka Zitnik](zitniklab.hms.harvard.edu)
 
 Prevailing methods for graphs require abundant label and edge information for learning. When data for a new task are scarce, meta-learning allows us to learn from prior experiences and form much-needed inductive biases for fast adaption to the new task. Here, we introduce G-Meta, a novel meta-learning approach for graphs. G-Meta uses local subgraphs to transfer subgraph-specific information and make the model learn the essential knowledge faster via meta gradients. G-Meta learns how to quickly adapt to a new task using only a handful of nodes or edges in the new task and does so by learning from data points in other graphs or related, albeit disjoint label sets. G-Meta is theoretically justified as we show that the evidence for a particular prediction can be found in the local subgraph surrounding the target node or edge. Experiments on seven datasets and nine baseline methods show that G-Meta can considerably outperform existing methods by up to 16.3%. Unlike previous methods, G-Meta can successfully learn in challenging, few-shot learning settings that require generalization to completely new graphs and never-before-seen labels. Finally, G-Meta scales to large graphs, which we demonstrate on our new Tree-of-Life dataset comprising of 1,840 graphs, a two-orders of magnitude increase in the number of graphs used in prior work.
 
-## Installation
+![Graph Meta Learning Problems](figs/graph_meta_learning.png)
 
-Dependencies:
-```
-pytorch, dgl, python 3.7, numpy, networkx, scipy, tqdm, sklearn, pandas
+
+### Environment Installation
+
+```bash
+python -m pip install --user virtualenv
+python -m venv gmeta_env
+source activate gmeta_env
+pip install -r requirements.txt
 ```
 
-## Run
+### Run
 To use 
 ```bash
 cd G-Meta
@@ -47,17 +52,28 @@ python train.py --data_dir # str: data path
                 --task_mode # 'True' or 'False': this is specifically for Tissue-PPI, where there are 10 tasks to evaluate.
                 --num_worker # int: number of workers to process the dataloader. default 0.
                 --train_result_report_steps # int: number to print the training accuracy.
-                --val_result_report_steps # int: number of steps to report the validation accuracy, recommend to the batchsz/n.
 ```
 
-To reproduce results, using the following code as example after you download the dataset from the section below.
+To apply it to the five datasets reported in the paper, using the following code as example after you download the dataset from the section below.
 
 arxiv-ogbn:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
 ```
-python 
+python G-Meta/train.py --data_dir PATH/G-Meta_Data/arxiv/ \
+                            --epoch 5 \
+                            --task_setup Disjoint \
+                            --k_spt 3 \
+                            --k_qry 24 \
+                            --n_way 3 \
+                            --update_lr 0.01 \
+                            --num_workers 0 \
+                            --train_result_report_steps 100 \
+                            --hidden_dim 128 \
+                            --update_step_test 20 \
+                            --task_num 32 \
+                            --batchsz 10000  
 ```
 </details>
 
@@ -66,7 +82,20 @@ Tissue-PPI:
 <summary>CLICK HERE FOR THE CODES!</summary>
 
 ```
-python 
+python G-Meta/train.py --data_dir PATH/G-Meta_Data/tissue_PPI/ \
+                            --epoch 5 \
+                            --task_setup Shared \
+                            --task_mode True \
+                            --task_n 2 \
+                            --k_qry 10 \
+                            --k_spt 5 \
+                            --update_lr 0.01 \
+                            --meta_lr 3e-3 \
+                            --num_workers 0 \
+                            --train_result_report_steps 100 \
+                            --hidden_dim 128 \
+                            --task_num 4 \
+                            --batchsz 1000 
 ```
 </details>
 
@@ -75,7 +104,20 @@ Fold-PPI:
 <summary>CLICK HERE FOR THE CODES!</summary>
 
 ```
-python 
+python G-Meta/train.py --data_dir PATH/G-Meta_Data/fold_PPI/ \
+                            --epoch 5 \
+                            --task_setup Disjoint \
+                            --k_qry 24 \
+                            --k_spt 3 \
+                            --n_way 3 \
+                            --update_lr 0.005 \
+                            --meta_lr 1e-3 \
+                            --num_workers 0 \
+                            --train_result_report_steps 100 \
+                            --hidden_dim 128 \
+                            --update_step_test 20 \
+                            --task_num 16 \
+                            --batchsz 4000 
 ```
 </details>
 
@@ -84,7 +126,23 @@ FirstMM-DB:
 <summary>CLICK HERE FOR THE CODES!</summary>
 
 ```
-python 
+python G-Meta/train.py --data_dir PATH/G-Meta_Data/FirstMM_DB/ \
+                            --epoch 5 \
+                            --task_setup Shared \
+                            --k_qry 32 \
+                            --k_spt 16 \
+                            --n_way 2 \
+                            --update_lr 0.01 \
+                            --update_step 10 \
+                            --meta_lr 5e-4 \
+                            --num_workers 0 \
+                            --train_result_report_steps 10 \
+                            --val_result_report_steps 100 \
+                            --hidden_dim 128 \
+                            --update_step_test 20 \
+                            --task_num 8 \
+                            --batchsz 1000 \
+                            --link_pred_mod True
 ```
 </details>
 
@@ -93,14 +151,32 @@ Tree-of-Life:
 <summary>CLICK HERE FOR THE CODES!</summary>
 
 ```
-python 
+python train.py --data_dir PATH/G-Meta_Data/tree-of-life/ \
+                            --epoch 5 \
+                            --task_setup Shared \
+                            --k_qry 16 \
+                            --k_spt 16 \
+                            --n_way 2 \
+                            --update_lr 0.005 \
+                            --update_step 10 \
+                            --meta_lr 5e-4 \
+                            --num_workers 0 \
+                            --train_result_report_steps 30 \
+                            --val_result_report_steps 100 \
+                            --hidden_dim 128 \
+                            --update_step_test 20 \
+                            --task_num 8 \
+                            --batchsz 5000 \
+                            --link_pred_mod True 
 ```
 </details>
 
+Also, checkout the [jupyter notebook example](test.ipynb).
 
-## Data Processing
 
-We provide the processed data files for the five real-world datasets used in the paper in this google drive link [here]().
+### Data Processing
+
+We provide the processed data files for the five real-world datasets used in the paper in this google drive link [here](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk).
 
 To create your own dataset, you should create the following files and put it under the name below:
 
@@ -119,7 +195,7 @@ For link prediction, note that the support set should contain only edges in the 
 
 We also provide a sample data processing script in the `data_process` folder. See `node_process.py` and `link_process.py`.
 
-## Cite us
+### Cite us
 ```
 @article{g-meta,
   title={Graph Meta Learning via Local Subgraphs},
@@ -129,6 +205,6 @@ We also provide a sample data processing script in the `data_process` folder. Se
 }
 ```
 
-## Contact
+### Contact
 Open an issue or send an email to kexinhuang@hsph.harvard.edu if you have any question. 
 

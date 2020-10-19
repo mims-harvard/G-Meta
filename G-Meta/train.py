@@ -89,7 +89,7 @@ def main():
     db_train = Subgraphs(root, 'train', info, n_way=args.n_way, k_shot=args.k_spt, k_query=args.k_qry, batchsz=args.batchsz, args = args, adjs = dgl_graph, h = args.h)
     db_val = Subgraphs(root, 'val', info, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100, args = args, adjs = dgl_graph, h = args.h)
     db_test = Subgraphs(root, 'test', info, n_way=args.n_way, k_shot=args.k_spt,k_query=args.k_qry, batchsz=100, args = args, adjs = dgl_graph, h = args.h)
-    
+    print('------ Start Training ------')
     s_start = time.time()
     max_memory = 0
     for epoch in range(args.epoch):
@@ -108,24 +108,23 @@ def main():
             accs = maml(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
             max_memory = max(max_memory, float(psutil.virtual_memory().used/(1024**3)))
             if step % args.train_result_report_steps == 0:
-                print('epoch:', epoch, 'step:', step, '\ttraining acc:', accs, '\ttime elapsed:', time.time() - s, '\tdata loading takes:', data_loading_time)
-                print('Memory usage:', float(psutil.virtual_memory().used/(1024**3)))
-            if (step + 1) % args.val_result_report_steps == 0:  # evaluation
-                db_v = DataLoader(db_val, 1, shuffle=True, num_workers=args.num_workers, pin_memory=True, collate_fn = collate)
-                accs_all_test = []
-
-                for x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry in db_v:
-
-                    accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
-                    accs_all_test.append(accs)
-
-                accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
-                print('epoch:', epoch, 'Val acc:', accs[-1])
-                if accs[-1] > max_acc:
-                    max_acc = accs[-1]
-                    model_max = copy.deepcopy(maml)
-
+                print('Epoch:', epoch + 1, ' Step:', step, ' training acc:', str(accs[-1])[:5], ' time elapsed:', str(time.time() - s)[:5], ' data loading takes:', str(data_loading_time)[:5], ' Memory usage:', str(float(psutil.virtual_memory().used/(1024**3)))[:5])
             s_r = time.time()
+            
+        # validation per epoch
+        db_v = DataLoader(db_val, 1, shuffle=True, num_workers=args.num_workers, pin_memory=True, collate_fn = collate)
+        accs_all_test = []
+
+        for x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry in db_v:
+
+            accs = maml.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
+            accs_all_test.append(accs)
+
+        accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
+        print('Epoch:', epoch + 1, ' Val acc:', str(accs[-1])[:5])
+        if accs[-1] > max_acc:
+            max_acc = accs[-1]
+            model_max = copy.deepcopy(maml)
                 
     db_t = DataLoader(db_test, 1, shuffle=True, num_workers=args.num_workers, pin_memory=True, collate_fn = collate)
     accs_all_test = []
@@ -135,18 +134,18 @@ def main():
         accs_all_test.append(accs)
 
     accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
-    print('Test acc:', accs[1])
+    print('Test acc:', str(accs[1])[:5])
 
     for x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry in db_t:
         accs = model_max.finetunning(x_spt, y_spt, x_qry, y_qry, c_spt, c_qry, n_spt, n_qry, g_spt, g_qry, feat)
         accs_all_test.append(accs)
     
-    torch.save(model_max.state_dict(), './model.pt')
+    #torch.save(model_max.state_dict(), './model.pt')
 
     accs = np.array(accs_all_test).mean(axis=0).astype(np.float16)
-    print('Early Stopped Test acc:', accs[-1])
-    print('Total Time:', time.time() - s_start)
-    print('Max Momory:', max_memory)
+    print('Early Stopped Test acc:', str(accs[-1])[:5])
+    print('Total Time:', str(time.time() - s_start)[:5])
+    print('Max Momory:', str(max_memory)[:5])
     
 if __name__ == '__main__':
 
@@ -166,7 +165,7 @@ if __name__ == '__main__':
     argparser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir.")
     argparser.add_argument("--no_finetune", default=True, type=str, required=False, help="no finetune mode.")
     argparser.add_argument("--task_setup", default='Disjoint', type=str, required=True, help="Select from Disjoint or Shared Setup. For Disjoint-Label, single/multiple graphs are both considered.")
-    argparser.add_argument("--method", default='G-Meta', type=str, required=True, help="Use G-Meta")
+    argparser.add_argument("--method", default='G-Meta', type=str, required=False, help="Use G-Meta")
     argparser.add_argument('--task_n', type=int, help='task number', default=1)
     argparser.add_argument("--task_mode", default='False', type=str, required=False, help="For Evaluating on Tasks")
     argparser.add_argument("--val_result_report_steps", default=100, type=int, required=False, help="validation report")
