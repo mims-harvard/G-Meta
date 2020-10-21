@@ -161,7 +161,7 @@ class Meta(nn.Module):
         loss_q = losses_q[-1] / task_num
         
         if torch.isnan(loss_q):
-            print('loss becomes null in this step')
+            pass
         else:    
             # optimize theta parameters
             self.meta_optim.zero_grad()

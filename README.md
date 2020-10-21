@@ -62,18 +62,19 @@ arxiv-ogbn:
 
 ```
 python G-Meta/train.py --data_dir PATH/G-Meta_Data/arxiv/ \
-                            --epoch 5 \
+                            --epoch 10 \
                             --task_setup Disjoint \
                             --k_spt 3 \
                             --k_qry 24 \
                             --n_way 3 \
+                            --update_step 10 \
                             --update_lr 0.01 \
                             --num_workers 0 \
-                            --train_result_report_steps 100 \
-                            --hidden_dim 128 \
+                            --train_result_report_steps 200 \
+                            --hidden_dim 256 \
                             --update_step_test 20 \
                             --task_num 32 \
-                            --batchsz 10000  
+                            --batchsz 10000 
 ```
 </details>
 
@@ -83,19 +84,20 @@ Tissue-PPI:
 
 ```
 python G-Meta/train.py --data_dir PATH/G-Meta_Data/tissue_PPI/ \
-                            --epoch 5 \
+                            --epoch 15 \
                             --task_setup Shared \
                             --task_mode True \
-                            --task_n 2 \
+                            --task_n 4 \
                             --k_qry 10 \
-                            --k_spt 5 \
+                            --k_spt 3 \
                             --update_lr 0.01 \
-                            --meta_lr 3e-3 \
+                            --update_step 10 \
+                            --meta_lr 5e-3 \
                             --num_workers 0 \
-                            --train_result_report_steps 100 \
+                            --train_result_report_steps 200 \
                             --hidden_dim 128 \
                             --task_num 4 \
-                            --batchsz 1000 
+                            --batchsz 1000
 ```
 </details>
 
@@ -117,7 +119,7 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/fold_PPI/ \
                             --hidden_dim 128 \
                             --update_step_test 20 \
                             --task_num 16 \
-                            --batchsz 4000 
+                            --batchsz 4000
 ```
 </details>
 
@@ -127,7 +129,7 @@ FirstMM-DB:
 
 ```
 python G-Meta/train.py --data_dir PATH/G-Meta_Data/FirstMM_DB/ \
-                            --epoch 5 \
+                            --epoch 15 \
                             --task_setup Shared \
                             --k_qry 32 \
                             --k_spt 16 \
@@ -136,12 +138,11 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/FirstMM_DB/ \
                             --update_step 10 \
                             --meta_lr 5e-4 \
                             --num_workers 0 \
-                            --train_result_report_steps 10 \
-                            --val_result_report_steps 100 \
+                            --train_result_report_steps 200 \
                             --hidden_dim 128 \
                             --update_step_test 20 \
                             --task_num 8 \
-                            --batchsz 1000 \
+                            --batchsz 1500 \
                             --link_pred_mod True
 ```
 </details>
@@ -152,22 +153,21 @@ Tree-of-Life:
 
 ```
 python train.py --data_dir PATH/G-Meta_Data/tree-of-life/ \
-                            --epoch 5 \
+                            --epoch 15 \
                             --task_setup Shared \
                             --k_qry 16 \
                             --k_spt 16 \
                             --n_way 2 \
                             --update_lr 0.005 \
                             --update_step 10 \
-                            --meta_lr 5e-4 \
+                            --meta_lr 0.0005 \
                             --num_workers 0 \
-                            --train_result_report_steps 30 \
-                            --val_result_report_steps 100 \
-                            --hidden_dim 128 \
+                            --train_result_report_steps 200 \
+                            --hidden_dim 256 \
                             --update_step_test 20 \
                             --task_num 8 \
                             --batchsz 5000 \
-                            --link_pred_mod True 
+                            --link_pred_mod True
 ```
 </details>
 
