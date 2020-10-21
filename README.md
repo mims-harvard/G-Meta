@@ -6,7 +6,7 @@ Prevailing methods for graphs require abundant label and edge information for le
 ![Graph Meta Learning Problems](figs/graph_meta_learning.png)
 
 
-### Environment Installation
+## Environment Installation
 
 ```bash
 python -m pip install --user virtualenv
@@ -15,7 +15,7 @@ source activate gmeta_env
 pip install -r requirements.txt
 ```
 
-### Run
+## Run
 To use 
 ```bash
 cd G-Meta
@@ -174,7 +174,7 @@ python train.py --data_dir PATH/G-Meta_Data/tree-of-life/ \
 Also, checkout the [jupyter notebook example](test.ipynb).
 
 
-### Data Processing
+## Data Processing
 
 We provide the processed data files for the five real-world datasets used in the paper in this google drive link [here](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk).
 
@@ -195,7 +195,7 @@ For link prediction, note that the support set should contain only edges in the 
 
 We also provide a sample data processing script in the `data_process` folder. See `node_process.py` and `link_process.py`.
 
-### Cite us
+## Cite us
 ```
 @article{g-meta,
   title={Graph Meta Learning via Local Subgraphs},
@@ -205,6 +205,6 @@ We also provide a sample data processing script in the `data_process` folder. Se
 }
 ```
 
-### Contact
+## Contact
 Open an issue or send an email to kexinhuang@hsph.harvard.edu if you have any question. 
 
