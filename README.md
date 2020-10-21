@@ -1,6 +1,8 @@
 # G-Meta: Graph Meta Learning via Local Subgraphs
 #### [Kexin Huang](https://www.kexinhuang.com), [Marinka Zitnik](https://zitniklab.hms.harvard.edu)
 
+#### [Project Website](zitniklab.hms.harvard.edu/projects/g-meta)
+
 Prevailing methods for graphs require abundant label and edge information for learning. When data for a new task are scarce, meta-learning allows us to learn from prior experiences and form much-needed inductive biases for fast adaption to the new task. Here, we introduce G-Meta, a novel meta-learning approach for graphs. G-Meta uses local subgraphs to transfer subgraph-specific information and make the model learn the essential knowledge faster via meta gradients. G-Meta learns how to quickly adapt to a new task using only a handful of nodes or edges in the new task and does so by learning from data points in other graphs or related, albeit disjoint label sets. G-Meta is theoretically justified as we show that the evidence for a particular prediction can be found in the local subgraph surrounding the target node or edge. Experiments on seven datasets and nine baseline methods show that G-Meta can considerably outperform existing methods by up to 16.3%. Unlike previous methods, G-Meta can successfully learn in challenging, few-shot learning settings that require generalization to completely new graphs and never-before-seen labels. Finally, G-Meta scales to large graphs, which we demonstrate on our new Tree-of-Life dataset comprising of 1,840 graphs, a two-orders of magnitude increase in the number of graphs used in prior work.
 
 ![Graph Meta Learning Problems](figs/graph_meta_learning.png)
@@ -16,7 +18,6 @@ pip install -r requirements.txt
 ```
 
 ## Run
-To use 
 ```bash
 cd G-Meta
 # Single graph disjoint label, node classification (e.g. arxiv-ogbn)
@@ -56,7 +57,7 @@ python train.py --data_dir # str: data path
 
 To apply it to the five datasets reported in the paper, using the following code as example after you download the dataset from the section below.
 
-arxiv-ogbn:
+**arxiv-ogbn**:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
@@ -78,7 +79,7 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/arxiv/ \
 ```
 </details>
 
-Tissue-PPI:
+**Tissue-PPI**:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
@@ -101,7 +102,7 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/tissue_PPI/ \
 ```
 </details>
 
-Fold-PPI:
+**Fold-PPI**:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
@@ -123,7 +124,7 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/fold_PPI/ \
 ```
 </details>
 
-FirstMM-DB:
+**FirstMM-DB**:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
@@ -147,7 +148,7 @@ python G-Meta/train.py --data_dir PATH/G-Meta_Data/FirstMM_DB/ \
 ```
 </details>
 
-Tree-of-Life:
+**Tree-of-Life**:
 <details>
 <summary>CLICK HERE FOR THE CODES!</summary>
 
@@ -171,12 +172,12 @@ python train.py --data_dir PATH/G-Meta_Data/tree-of-life/ \
 ```
 </details>
 
-Also, checkout the [jupyter notebook example](test.ipynb).
+Also, checkout the [Jupyter notebook example](test.ipynb).
 
 
 ## Data Processing
 
-We provide the processed data files for the five real-world datasets used in the paper in this google drive link [here](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk).
+We provide the processed data files for the five real-world datasets used in the paper in this google drive [link](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk).
 
 To create your own dataset, you should create the following files and put it under the name below:
 
@@ -184,7 +185,7 @@ To create your own dataset, you should create the following files and put it und
 - `features.npy`: An array of arrays [feat_1, feat_2, ...] where feat_i is the feature matrix of graph i. 
 
 Then, for node classification, include the following files:
-- `train.csv`, `val.csv`, and `test.csv`: Each file has two columns, the first one is 'X_Y' (node Y from graph X) and its label 'Z'. Each file corresponds to the meta-train, meta-val, meta-test set. Our 
+- `train.csv`, `val.csv`, and `test.csv`: Each file has two columns, the first one is 'X_Y' (node Y from graph X) and its label 'Z'. Each file corresponds to the meta-train, meta-val, meta-test set.  
 - `label.pkl`: A dictionary of labels where {'X_Y': Z} means the node Y in graph X has label Z.  
 
 For link prediction, note that the support set should contain only edges in the highly incomplete graph (e.g. 30% of links) whereas the query set node pairs should be in the rest 70% of links. That is in GNN message passing, it should ONLY pass on support set graph, otherwise, the query set performance would be biased. This is why we split the meta-train/val/test csv files into separate support and query files. Thus, for link prediction, include the following files instead:
