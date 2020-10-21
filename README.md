@@ -1,5 +1,5 @@
 # G-Meta: Graph Meta Learning via Local Subgraphs
-#### [Kexin Huang](https://www.kexinhuang.com), [Marinka Zitnik](https://zitniklab.hms.harvard.edu)
+#### Authors: [Kexin Huang](https://www.kexinhuang.com), [Marinka Zitnik](https://zitniklab.hms.harvard.edu)
 
 #### [Project Website](zitniklab.hms.harvard.edu/projects/g-meta)
 
@@ -55,7 +55,7 @@ python train.py --data_dir # str: data path
                 --train_result_report_steps # int: number to print the training accuracy.
 ```
 
-To apply it to the five datasets reported in the paper, using the following code as example after you download the dataset from the section below.
+To apply it to the five datasets reported in the paper, using the following code as example after you download the processed datasets from the section below.
 
 **arxiv-ogbn**:
 <details>
@@ -177,7 +177,7 @@ Also, checkout the [Jupyter notebook example](test.ipynb).
 
 ## Data Processing
 
-We provide the processed data files for the five real-world datasets used in the paper in this google drive [link](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk).
+We provide the processed data files for the five real-world datasets used in the paper in this google drive [link](https://drive.google.com/file/d/1TC06A02wmIQteKzqGSbl_i3VIQzsHVop/view?usp=drivesdk) and this Microsoft OneDrive [link](https://hu-my.sharepoint.com/:u:/g/personal/kexinhuang_hsph_harvard_edu/EbSj1CehKDtKniKqtICWsScBESs9ldWWcTttGdADnFc6Wg?e=gJhl7c).
 
 To create your own dataset, you should create the following files and put it under the name below:
 
