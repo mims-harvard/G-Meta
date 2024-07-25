@@ -1,4 +1,4 @@
-torch == 1.5.0
+torch == 2.2.0
 dgl == 0.4.3post2
 numpy
 networkx
